@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-white">Gestión de Historial</h2>
+    </div>
+
+    <div class="p-4 shadow-sm rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+        <table class="table table-hover table-borderless" style="--bs-table-bg: transparent; color: #1A1614;">
+            <thead class="border-bottom border-dark">
+                <tr>
+                    <th>CÓDIGO</th>
+                    <th>USUARIO</th>
+                    <th>LIBRO</th>
+                    <th>FECHA EVENTO</th>
+                    <th>TIPO</th>
+                    <th>ESTADO</th>
+                    <th>DESCRIPCIÓN</th>
+                </tr>
+            </thead>
+            <tbody class="align-middle">
+                {% for evento in historial %}
+                <tr>
+                    <td class="fw-bold">#{{ evento.id }}</td>
+                    <td>{{ evento.prestamo.usuario.nombre|default:"--" }}</td>
+                    <td>
+                        {% if evento.prestamo %}
+                            {{ evento.prestamo.libros_resumen }}
+                        {% else %}
+                            --
+                        {% endif %}
+                    </td>
+                    <td>{{ evento.fecha_accion|date:"j \d\e F \d\e Y" }}</td>
+                    <td>
+                        {% if evento.tipo_accion == 'Prestamo' %}
+                            <span class="badge rounded-pill px-3 py-2" style="background-color: #3A4B31; color: #DCE7D3;">PRÉSTAMO</span>
+                        {% elif evento.tipo_accion == 'Devolucion' %}
+                            <span class="badge rounded-pill px-3 py-2 bg-secondary text-white">DEVOLUCIÓN</span>
+                        {% elif evento.tipo_accion == 'Multa' %}
+                            <span class="badge rounded-pill px-3 py-2" style="background-color: #6E362C; color: #EACEC9;">MULTA</span>
+                        {% elif evento.tipo_accion == 'Moroso' %}
+                            <span class="badge rounded-pill px-3 py-2 bg-dark text-white">MOROSO</span>
+                        {% else %}
+                            <span class="badge rounded-pill px-3 py-2 bg-secondary text-white">{{ evento.tipo_accion }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if evento.prestamo %}
+                            <span class="badge rounded-pill px-3 py-2 bg-secondary text-white">{{ evento.prestamo.estado }}</span>
+                        {% else %}
+                            <span class="badge rounded-pill px-3 py-2 bg-secondary text-white">HISTORICO</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ evento.descripcion }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-4 text-muted">No hay eventos en el historial.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

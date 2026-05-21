@@ -1,0 +1,45 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registro de usuario</title>
+    <link rel="stylesheet" href="{% static 'css/Login.css' %}">
+</head>
+<body>
+    <div class="contenedor">
+        <div class="login-box">
+            <div class="logo-container">
+                <img src="{% static 'img/Logo-Orion.png' %}" alt="Logo" class="logo-img">
+            </div>
+            <form method="POST" action="{% url 'registro_usuario' %}">
+                {% csrf_token %}
+                {% if messages %}
+                    {% for message in messages %}
+                    <div class="login-error" role="alert">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+                <label>Nombre completo <span class="text-danger fw-bold">*</span></label>
+                <input type="text" name="nombre" autocomplete="name" required>
+
+                <label>Correo <span class="text-danger fw-bold">*</span></label>
+                <input type="email" name="email" autocomplete="email" required>
+
+                <label>Telefono <span class="text-danger fw-bold">*</span></label>
+                <input type="text" name="telefono" autocomplete="tel" required>
+
+                <label>Contrasena <span class="text-danger fw-bold">*</span></label>
+                <input type="password" name="password" autocomplete="new-password" required>
+
+                <label>Confirmar contrasena <span class="text-danger fw-bold">*</span></label>
+                <input type="password" name="password2" autocomplete="new-password" required>
+
+                <button type="submit">Crear cuenta</button>
+                <p style="text-align:center; margin-top: 1rem;">
+                    <a href="{% url 'login' %}">Ya tengo cuenta</a>
+                </p>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="mb-4">
+        <h2 class="fw-bold text-white">Resultados para: "{{ query }}"</h2>
+    </div>
+
+    <!-- Libros -->
+    <div class="p-4 shadow-sm rounded-3 mb-4" style="background-color: var(--color-tarjetas); color: #1A1614;">
+        <h5 class="fw-bold mb-3">Libros</h5>
+        {% if libros %}
+        <table class="table table-hover table-borderless" style="--bs-table-bg: transparent; color: #1A1614;">
+            <thead class="border-bottom border-dark">
+                <tr>
+                    <th>ISBN</th>
+                    <th>TÍTULO</th>
+                    <th>AUTOR</th>
+                    <th>DISPONIBLES</th>
+                    <th>TOTAL</th>
+                </tr>
+            </thead>
+            <tbody class="align-middle">
+                {% for libro in libros %}
+                <tr>
+                    <td class="fw-bold">{{ libro.isbn_13|default:libro.isbn_10|default:"--" }}</td>
+                    <td>{{ libro.titulo }}</td>
+                    <td>{{ libro.autor }}</td>
+                    <td><span class="badge bg-dark px-3 py-2">{{ libro.cantidad_disponible }}</span></td>
+                    <td><span class="badge bg-dark px-3 py-2">{{ libro.cantidad_total }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted mb-0">No se encontraron libros.</p>
+        {% endif %}
+    </div>
+
+    <!-- Préstamos -->
+    <div class="p-4 shadow-sm rounded-3 mb-4" style="background-color: var(--color-tarjetas); color: #1A1614;">
+        <h5 class="fw-bold mb-3">Préstamos</h5>
+        {% if prestamos %}
+        <table class="table table-hover table-borderless" style="--bs-table-bg: transparent; color: #1A1614;">
+            <thead class="border-bottom border-dark">
+                <tr>
+                    <th>CÓDIGO</th>
+                    <th>USUARIO</th>
+                    <th>LIBRO</th>
+                    <th>VENCIMIENTO</th>
+                    <th>ESTADO</th>
+                </tr>
+            </thead>
+            <tbody class="align-middle">
+                {% for prestamo in prestamos %}
+                <tr>
+                    <td class="fw-bold">#{{ prestamo.id }}</td>
+                    <td>{{ prestamo.usuario.nombre|default:"Usuario Eliminado" }}</td>
+                    <td>{{ prestamo.libros_resumen }}</td>
+                    <td>{{ prestamo.fecha_limite }}</td>
+                    <td>
+                        {% if prestamo.estado == 'Activo' %}
+                        <span class="badge rounded-pill px-3 py-2" style="background-color: #3A4B31; color: #DCE7D3;">Activo</span>
+                        {% elif prestamo.estado == 'Retraso' %}
+                        <span class="badge rounded-pill px-3 py-2" style="background-color: #6E362C; color: #EACEC9;">Retraso</span>
+                        {% else %}
+                        <span class="badge rounded-pill px-3 py-2 bg-secondary text-white">Devuelto</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted mb-0">No se encontraron préstamos.</p>
+        {% endif %}
+    </div>
+
+    <!-- Usuarios -->
+    <div class="p-4 shadow-sm rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+        <h5 class="fw-bold mb-3">Usuarios</h5>
+        {% if usuarios %}
+        <table class="table table-hover table-borderless" style="--bs-table-bg: transparent; color: #1A1614;">
+            <thead class="border-bottom border-dark">
+                <tr>
+                    <th>NOMBRE</th>
+                    <th>EMAIL</th>
+                    <th>TELÉFONO</th>
+                </tr>
+            </thead>
+            <tbody class="align-middle">
+                {% for usuario in usuarios %}
+                <tr>
+                    <td class="fw-bold">{{ usuario.nombre }}</td>
+                    <td>{{ usuario.email }}</td>
+                    <td>{{ usuario.telefono }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted mb-0">No se encontraron usuarios.</p>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

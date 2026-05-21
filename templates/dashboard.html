@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    {% if es_usuario_comun %}
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+            <h2 class="fw-bold text-white mb-0">Mi biblioteca</h2>
+            <a href="{% url 'libros' %}" class="btn-nuevo shadow-sm text-decoration-none">
+                Ver catalogo <i class="fas fa-book ms-1"></i>
+            </a>
+        </div>
+
+        {% for prestamo in alertas_entrega %}
+        <div class="alert alert-warning shadow-sm border-0">
+            <i class="fas fa-clock me-2"></i>
+            Te queda poco tiempo para devolver <strong>{{ prestamo.libros_resumen }}</strong>.
+            Fecha limite: <strong>{{ prestamo.fecha_limite|date:"d/m/Y" }}</strong>.
+        </div>
+        {% endfor %}
+
+        <div class="row g-4 mb-4">
+            <div class="col-md-4">
+                <div class="p-3 shadow-sm rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+                    <small class="fw-bold opacity-75">LIBROS LEIDOS</small>
+                    <h2 class="mb-0 fw-bold">{{ libros_leidos }}</h2>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 shadow-sm rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+                    <small class="fw-bold opacity-75">PRESTAMOS ACTIVOS</small>
+                    <h2 class="mb-0 fw-bold">{{ prestamos_activos }}</h2>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 shadow-sm rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+                    <small class="fw-bold opacity-75">MULTAS SIN PAGAR</small>
+                    <h2 class="mb-0 fw-bold">${{ total_multas }}</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <div class="p-4 shadow-sm rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+                    <h5 class="fw-bold mb-4">MIS PRESTAMOS</h5>
+                    <table class="table table-hover table-borderless" style="--bs-table-bg: transparent; color: #1A1614;">
+                        <thead class="border-bottom border-dark">
+                            <tr>
+                                <th>LIBRO</th>
+                                <th>VENCIMIENTO</th>
+                                <th>ESTADO</th>
+                            </tr>
+                        </thead>
+                        <tbody class="align-middle">
+                            {% for prestamo in prestamos_recientes %}
+                            <tr>
+                                <td class="fw-bold">{{ prestamo.libros_resumen }}</td>
+                                <td>{{ prestamo.fecha_limite|date:"d/m/Y" }}</td>
+                                <td><span class="badge rounded-pill bg-dark px-3 py-2">{{ prestamo.estado }}</span></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="3" class="text-center py-4 text-muted">Aun no tienes prestamos registrados.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="p-4 shadow-sm rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+                    <h5 class="fw-bold mb-4">RESERVAS</h5>
+                    {% for reserva in reservas_usuario %}
+                    <div class="border-bottom border-dark-subtle pb-3 mb-3">
+                        <strong>{{ reserva.libro.titulo }}</strong>
+                        <div class="small text-muted">{{ reserva.estado }}</div>
+                        {% if reserva.fecha_expiracion %}
+                        <div class="small">Apartado hasta {{ reserva.fecha_expiracion|date:"d/m/Y H:i" }}</div>
+                        {% endif %}
+                        {% if reserva.libro.cantidad_disponible > 0 %}
+                        <form action="{% url 'usuario_pedir_libro' reserva.libro.id %}" method="POST" class="mt-2">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-dark w-100">
+                                <i class="fas fa-hand-holding me-1"></i> Pedir prestado
+                            </button>
+                        </form>
+                        <small class="text-muted d-block mt-2">El prestamo sera por {{ dias_prestamo_defecto }} dias mas 1 dia de gracia.</small>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <p class="text-muted mb-0">No tienes reservas activas.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="row g-4 mb-4">
+            <div class="col-md-3">
+                <div class="p-3 shadow-sm border-0 rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+                    <small class="fw-bold opacity-75">LIBROS TOTALES</small>
+                    <h2 class="mb-0 fw-bold">{{ total_libros }}</h2>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 shadow-sm border-0 rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+                    <small class="fw-bold opacity-75">PRESTAMOS ACTIVOS</small>
+                    <h2 class="mb-0 fw-bold">{{ prestamos_activos }}</h2>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 shadow-sm border-0 rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+                    <small class="fw-bold opacity-75">LIBROS EN MORA</small>
+                    <h2 class="mb-0 fw-bold">{{ libros_mora }}</h2>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="p-3 shadow-sm border-0 rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+                    <small class="fw-bold opacity-75">TOTAL DE MULTAS</small>
+                    <h2 class="mb-0 fw-bold">${{ total_multas }}</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 shadow-sm rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+            <h5 class="fw-bold mb-4">PRESTAMOS RECIENTES</h5>
+            <table class="table table-hover table-borderless" style="--bs-table-bg: transparent; color: #1A1614;">
+                <thead class="border-bottom border-dark">
+                    <tr>
+                        <th>TITULO DEL LIBRO</th>
+                        <th>USUARIO</th>
+                        <th>FECHA VENCIMIENTO</th>
+                        <th>ESTADO</th>
+                    </tr>
+                </thead>
+                <tbody class="align-middle">
+                    {% for prestamo in prestamos_recientes %}
+                    <tr>
+                        <td class="fw-bold">{{ prestamo.libros_resumen }}</td>
+                        <td>{{ prestamo.usuario.nombre|default:"Usuario Eliminado" }}</td>
+                        <td>{{ prestamo.fecha_limite|date:"j \\d\\e F" }}</td>
+                        <td><span class="badge rounded-pill bg-dark px-4 py-2 fs-6">{{ prestamo.estado }}</span></td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="text-center py-4 text-muted">No hay prestamos registrados en el sistema.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

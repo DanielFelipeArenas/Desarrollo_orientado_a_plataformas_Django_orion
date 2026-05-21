@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-white">Configuracion</h2>
+    </div>
+
+    <div class="p-4 shadow-sm rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+        <h5 class="fw-bold mb-3">Configuracion general</h5>
+        <form method="POST" action="{% url 'configuracion' %}">
+            {% csrf_token %}
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">Nombre de la biblioteca</label>
+                    <input type="text" class="form-control" name="nombre_biblioteca" value="{{ config_sistema.nombre_biblioteca }}" maxlength="100" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Maximo por cliente</label>
+                    <input type="number" class="form-control" name="max_libros_cliente" value="{{ config_sistema.max_libros_cliente }}" min="1" max="50" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Dias de prestamo</label>
+                    <input type="number" class="form-control" name="dias_prestamo_defecto" value="{{ config_sistema.dias_prestamo_defecto }}" min="1" max="60" required>
+                    <small class="text-muted">Siempre se suma 1 dia de gracia a esta cantidad.</small>
+                </div>
+            </div>
+
+            <div class="border-top border-dark pt-4">
+            <h5 class="fw-bold mb-3">Paleta de colores</h5>
+            <div class="row g-3">
+                {% for paleta in paletas_disponibles %}
+                <div class="col-md-4 col-xl-3">
+                    <label class="w-100 border rounded-3 p-3 d-flex align-items-center gap-3"
+                           style="cursor: pointer; background: rgba(255,255,255,.35);">
+                        <input type="radio" name="paleta_colores" value="{{ paleta.id }}"
+                               {% if paleta.id == paleta_actual %}checked{% endif %}>
+                        <span class="rounded-circle d-inline-block"
+                              style="width: 28px; height: 28px; background-color: {{ paleta.color }};"></span>
+                        <span class="fw-bold">{{ paleta.nombre }}</span>
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+            </div>
+            <div class="border-top border-dark mt-4 pt-4">
+                <h6 class="fw-bold mb-3">Colores manuales</h6>
+                <div class="row g-3">
+                    <div class="col-md-4 col-xl-2">
+                        <label class="form-label fw-bold">Fondo</label>
+                        <input type="color" class="form-control form-control-color w-100" name="color_fondo" value="{{ colores_personalizados.color_fondo }}">
+                    </div>
+                    <div class="col-md-4 col-xl-2">
+                        <label class="form-label fw-bold">Menu</label>
+                        <input type="color" class="form-control form-control-color w-100" name="color_sidebar" value="{{ colores_personalizados.color_sidebar }}">
+                    </div>
+                    <div class="col-md-4 col-xl-2">
+                        <label class="form-label fw-bold">Acento</label>
+                        <input type="color" class="form-control form-control-color w-100" name="color_acento" value="{{ colores_personalizados.color_acento }}">
+                    </div>
+                    <div class="col-md-4 col-xl-2">
+                        <label class="form-label fw-bold">Texto</label>
+                        <input type="color" class="form-control form-control-color w-100" name="color_texto" value="{{ colores_personalizados.color_texto }}">
+                    </div>
+                    <div class="col-md-4 col-xl-2">
+                        <label class="form-label fw-bold">Tarjetas</label>
+                        <input type="color" class="form-control form-control-color w-100" name="color_tarjetas" value="{{ colores_personalizados.color_tarjetas }}">
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4">
+                <button type="submit" class="btn text-white" style="background-color: var(--color-acento);">
+                    Guardar cambios
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const personalizada = document.querySelector('input[name="paleta_colores"][value="personalizada"]');
+        document.querySelectorAll('input[type="color"]').forEach(input => {
+            input.addEventListener('input', () => {
+                if (personalizada) personalizada.checked = true;
+            });
+        });
+    });
+</script>
+{% endblock %}

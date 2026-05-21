@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-white">Gestión de Empleados</h2>
+        <button class="btn-nuevo shadow-sm" data-bs-toggle="modal" data-bs-target="#modalAnadirEmpleado">
+            AÑADIR EMPLEADO <i class="fas fa-plus ms-1"></i>
+        </button>
+    </div>
+
+    <div class="p-4 shadow-sm rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+        <table class="table table-hover table-borderless" style="--bs-table-bg: transparent; color: #1A1614;">
+            <thead class="border-bottom border-dark">
+                <tr>
+                    <th>NOMBRE</th>
+                    <th>EMAIL</th>
+                    <th>ACCIONES</th>
+                </tr>
+            </thead>
+            <tbody class="align-middle">
+                {% for empleado in mis_empleados %}
+                <tr>
+                    <td class="fw-bold">{{ empleado.nombre }}</td>
+                    <td>{{ empleado.email }}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-dark me-1"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalEditarEmpleado{{ empleado.id }}">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalEliminarEmpleado{{ empleado.id }}">
+                            <i class="fas fa-trash"></i> Eliminar
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="3" class="text-center py-4 text-muted">No hay empleados registrados.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+
+<div class="modal fade" id="modalAnadirEmpleado" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background-color: var(--color-tarjetas); color: #1A1614;">
+            <div class="modal-header border-dark border-bottom">
+                <h5 class="modal-title fw-bold">Añadir Empleado</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{% url 'crear_empleado' %}" method="POST">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Nombre <span class="text-danger fw-bold">*</span></label>
+                        <input type="text" class="form-control" name="nombre" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Email <span class="text-danger fw-bold">*</span></label>
+                        <input type="email" class="form-control" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Contraseña <span class="text-danger fw-bold">*</span></label>
+                        <input type="password" class="form-control" name="password" required>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-outline-dark" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn text-white" style="background-color: var(--color-acento);">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% for empleado in mis_empleados %}
+
+<div class="modal fade" id="modalEditarEmpleado{{ empleado.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background-color: var(--color-tarjetas); color: #1A1614;">
+            <div class="modal-header border-dark border-bottom">
+                <h5 class="modal-title fw-bold">Editar Empleado</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{% url 'editar_empleado' empleado.id %}" method="POST">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Nombre <span class="text-danger fw-bold">*</span></label>
+                        <input type="text" class="form-control" name="nombre" value="{{ empleado.nombre }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Email <span class="text-danger fw-bold">*</span></label>
+                        <input type="email" class="form-control" name="email" value="{{ empleado.email }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Nueva contraseña</label>
+                        <input type="password" class="form-control" name="password" placeholder="Dejar vacío para conservar la actual">
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-outline-dark" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn text-white" style="background-color: var(--color-acento);">Actualizar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalEliminarEmpleado{{ empleado.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background-color: var(--color-tarjetas); color: #1A1614;">
+            <div class="modal-header border-dark border-bottom">
+                <h5 class="modal-title fw-bold">Eliminar Empleado</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Estás seguro de eliminar a <strong>{{ empleado.nombre }}</strong>?</p>
+                <p class="mb-0 text-muted"><small>Si ya está asociado a préstamos o multas, no se permitirá borrarlo.</small></p>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-outline-dark" data-bs-dismiss="modal">Cancelar</button>
+                <form action="{% url 'eliminar_empleado' empleado.id %}" method="POST" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Eliminar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endfor %}
+{% endblock %}

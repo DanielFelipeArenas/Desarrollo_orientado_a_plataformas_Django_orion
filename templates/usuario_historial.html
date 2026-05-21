@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="fw-bold text-white mb-4">Historial de libros leidos</h2>
+    <div class="p-4 shadow-sm rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+        <table class="table table-hover table-borderless" style="--bs-table-bg: transparent; color: #1A1614;">
+            <thead class="border-bottom border-dark">
+                <tr>
+                    <th>LIBRO</th>
+                    <th>FECHA PRESTAMO</th>
+                    <th>FECHA LIMITE</th>
+                    <th>DEVOLUCION</th>
+                    <th>ESTADO</th>
+                    <th>VALORACION</th>
+                </tr>
+            </thead>
+            <tbody class="align-middle">
+                {% for detalle in detalles %}
+                <tr>
+                    <td class="fw-bold">{{ detalle.libro.titulo }}</td>
+                    <td>{{ detalle.prestamo.fecha_prestamo|date:"d/m/Y" }}</td>
+                    <td>{{ detalle.prestamo.fecha_limite|date:"d/m/Y" }}</td>
+                    <td>{{ detalle.fecha_devolucion_real|date:"d/m/Y"|default:"Pendiente" }}</td>
+                    <td><span class="badge rounded-pill bg-dark px-3 py-2">{{ detalle.prestamo.estado }}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-warning"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalValorarLibro{{ detalle.id }}">
+                            <i class="fas fa-star"></i> Valorar
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center py-4 text-muted">Aun no tienes libros en tu historial.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+{% for detalle in detalles %}
+<div class="modal fade" id="modalValorarLibro{{ detalle.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background-color: var(--color-tarjetas); color: #1A1614;">
+            <div class="modal-header border-dark border-bottom">
+                <h5 class="modal-title fw-bold">Valorar libro</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{% url 'usuario_valorar_libro' detalle.libro.id %}" method="POST">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <p class="mb-3"><strong>{{ detalle.libro.titulo }}</strong></p>
+                    <label class="form-label fw-bold">Estrellas</label>
+                    <select class="form-select" name="puntaje" required>
+                        <option value="5">5 estrellas</option>
+                        <option value="4">4 estrellas</option>
+                        <option value="3">3 estrellas</option>
+                        <option value="2">2 estrellas</option>
+                        <option value="1">1 estrella</option>
+                    </select>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-outline-dark" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn text-white" style="background-color: var(--color-acento);">Guardar valoracion</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

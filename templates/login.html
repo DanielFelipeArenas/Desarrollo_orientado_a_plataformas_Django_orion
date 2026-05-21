@@ -1,0 +1,56 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="{% static 'css/Login.css' %}">
+</head>
+<body>
+
+    <div class="contenedor">
+
+        <div class="login-box">
+
+            <!-- Logo -->
+            <div class="logo-container">
+                <img src="{% static 'img/Logo-Orion.png' %}" alt="Logo" class="logo-img">
+            </div>
+
+            <!-- Formulario -->
+            <form method="POST" action="{% url 'login' %}">
+                
+                <!-- Seguridad Django -->
+                {% csrf_token %}
+
+                <!-- Error de credenciales -->
+                {% if login_error %}
+                <div class="login-error" role="alert">
+                    Usuario o contraseña incorrectos.
+                </div>
+                {% endif %}
+
+                <!-- Usuario -->
+                <label>Usuario <span class="text-danger fw-bold">*</span></label>
+                <input type="text" name="username" autocomplete="username" required>
+
+                <!-- Contraseña -->
+                <label>Contraseña <span class="text-danger fw-bold">*</span></label>
+                <input type="password" name="password" autocomplete="current-password" required>
+
+                <!-- Botón -->
+                <button type="submit">Iniciar sesión</button>
+
+                <p style="text-align:center; margin-top: 1rem;">
+                    <a href="{% url 'registro_usuario' %}">Crear cuenta de usuario</a>
+                </p>
+            </form>
+
+        </div>
+
+    </div>
+
+</body>
+</html>

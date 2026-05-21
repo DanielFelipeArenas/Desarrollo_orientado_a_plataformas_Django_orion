@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-white">Auditoria</h2>
+    </div>
+
+    <div class="p-4 shadow-sm rounded-3 mb-4" style="background-color: var(--color-tarjetas); color: #1A1614;">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Tabla</label>
+                <input type="text" class="form-control" name="tabla" value="{{ request.GET.tabla }}" placeholder="Ej: Libro">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Accion</label>
+                <select class="form-select" name="accion">
+                    <option value="">Todas</option>
+                    {% for valor, etiqueta in acciones_disponibles %}
+                    <option value="{{ valor }}" {% if request.GET.accion == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn text-white" style="background-color: var(--color-acento);">Filtrar</button>
+                <a href="{% url 'auditlog' %}" class="btn btn-outline-dark">Limpiar</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="p-4 shadow-sm rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+        <div class="table-responsive">
+            <table class="table table-hover table-borderless" style="--bs-table-bg: transparent; color: #1A1614;">
+                <thead class="border-bottom border-dark">
+                    <tr>
+                        <th>FECHA</th>
+                        <th>ACCION</th>
+                        <th>TABLA</th>
+                        <th>OBJETO</th>
+                        <th>USUARIO</th>
+                        <th>IP</th>
+                    </tr>
+                </thead>
+                <tbody class="align-middle">
+                    {% for registro in registros %}
+                    <tr>
+                        <td>{{ registro.fecha|date:"d/m/Y H:i" }}</td>
+                        <td><span class="badge bg-dark">{{ registro.accion }}</span></td>
+                        <td class="fw-bold">{{ registro.tabla }}</td>
+                        <td>{{ registro.objeto_repr|default:"--" }}</td>
+                        <td>
+                            {% if registro.empleado_nombre %}
+                                {{ registro.empleado_nombre }}
+                            {% elif registro.usuario %}
+                                {{ registro.usuario.username }}
+                            {% else %}
+                                Sistema
+                            {% endif %}
+                        </td>
+                        <td>{{ registro.ip_address|default:"--" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">No hay registros de auditoria.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if is_paginated %}
+        <nav class="mt-3">
+            <ul class="pagination mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Anterior</a></li>
+                {% endif %}
+                <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+                {% if page_obj.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Siguiente</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

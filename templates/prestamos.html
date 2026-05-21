@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-white">Gestión de Préstamos</h2>
+    </div>
+
+    <div class="p-4 shadow-sm rounded-3" style="background-color: var(--color-tarjetas); color: #1A1614;">
+        <table class="table table-hover table-borderless" style="--bs-table-bg: transparent; color: #1A1614;">
+            <thead class="border-bottom border-dark">
+                <tr>
+                    <th>CÓDIGO</th>
+                    <th>USUARIO</th>
+                    <th>LIBRO</th>
+                    <th>VENCIMIENTO</th>
+                    <th>ESTADO</th>
+                    <th>ACCIONES</th>
+                </tr>
+            </thead>
+            <tbody class="align-middle">
+                {% for prestamo in mis_prestamos %}
+                <tr>
+                    <td class="fw-bold">#{{ prestamo.id }}</td>
+                    <td>{{ prestamo.usuario.nombre|default:"--" }}</td>
+                    <td>
+                        {{ prestamo.libros_resumen }}
+                    </td>
+                    <td>{{ prestamo.fecha_limite|date:"j \d\e F \d\e Y" }}</td>
+                    <td>
+                        {% if prestamo.estado == 'Activo' %}
+                        <span class="badge rounded-pill px-4 py-2 fs-6" style="background-color: #3A4B31; color: #DCE7D3;">Activo</span>
+                        {% elif prestamo.estado == 'Retraso' %}
+                        <span class="badge rounded-pill px-4 py-2 fs-6" style="background-color: #6E362C; color: #EACEC9;">Retraso</span>
+                        {% else %}
+                        <span class="badge rounded-pill px-4 py-2 fs-6 bg-secondary text-white">Devuelto</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if prestamo.estado == 'Activo' or prestamo.estado == 'Retraso' %}
+                        <button class="btn btn-sm btn-outline-dark me-1"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalDevolver{{ prestamo.id }}">
+                            <i class="fas fa-undo"></i> Devolver
+                        </button>
+                        {% endif %}
+                        <button class="btn btn-sm btn-outline-danger"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalEliminarPrestamo{{ prestamo.id }}">
+                            <i class="fas fa-trash"></i> Borrar
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-muted">No hay préstamos registrados.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+{% for prestamo in mis_prestamos %}
+
+{% if prestamo.estado == 'Activo' or prestamo.estado == 'Retraso' %}
+<!-- Modal Devolver -->
+<div class="modal fade" id="modalDevolver{{ prestamo.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background-color: var(--color-tarjetas); color: #1A1614;">
+            <div class="modal-header border-dark border-bottom">
+                <h5 class="modal-title fw-bold">Confirmar Devolución</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Confirmas la devolución de <strong>{{ prestamo.libros_resumen }}</strong> por parte de <strong>{{ prestamo.usuario.nombre|default:"Usuario Eliminado" }}</strong>?</p>
+                {% if prestamo.estado == 'Retraso' %}
+                <p class="mb-0" style="color: #6E362C;"><i class="fas fa-exclamation-triangle me-1"></i> Este préstamo tiene retraso. El monto de la multa se actualizará al día de hoy.</p>
+                {% endif %}
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-outline-dark" data-bs-dismiss="modal">Cancelar</button>
+                <form action="{% url 'devolver_prestamo' prestamo.id %}" method="POST" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn text-white" style="background-color: var(--color-acento);">Confirmar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Modal Eliminar Préstamo -->
+<div class="modal fade" id="modalEliminarPrestamo{{ prestamo.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background-color: var(--color-tarjetas); color: #1A1614;">
+            <div class="modal-header border-dark border-bottom">
+                <h5 class="modal-title fw-bold">Eliminar Préstamo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Eliminar el préstamo <strong>#{{ prestamo.id }}</strong> de <strong>{{ prestamo.usuario.nombre|default:"Usuario Eliminado" }}</strong>? El historial del usuario se conservará en auditoria.</p>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-outline-dark" data-bs-dismiss="modal">Cancelar</button>
+                <form action="{% url 'eliminar_prestamo' prestamo.id %}" method="POST" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Eliminar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endfor %}
+{% endblock %}

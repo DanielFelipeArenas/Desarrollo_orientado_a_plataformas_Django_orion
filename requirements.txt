@@ -1,0 +1,6 @@
+Django>=5.2,<6.1
+django-environ
+djangorestframework
+channels
+psycopg2-binary
+requests==2.31.0

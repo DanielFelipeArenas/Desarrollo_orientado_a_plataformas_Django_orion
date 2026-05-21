@@ -1,0 +1,131 @@
+body {
+    margin: 0;
+    min-height: 100vh;
+    padding: 24px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Source Sans Pro', Arial, sans-serif;
+    background:
+        radial-gradient(circle at top, rgba(217, 119, 6, 0.12), transparent 35%),
+        linear-gradient(180deg, #231d1a 0%, #1A1614 100%);
+}
+
+.login-box {
+    background-color: #3D322A;
+    padding: 44px 40px;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.12);
+    width: min(440px, 100%);
+    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+    text-align: center;
+}
+
+.logo-container {
+    margin-bottom: 24px;
+}
+
+.logo-img {
+    width: 170px;
+    height: 170px;
+    object-fit: cover;
+    border-radius: 50%;
+    padding: 4px;
+}
+
+label {
+    display: block;
+    color: #F5EEDB;
+    margin-top: 14px;
+    margin-bottom: 5px;
+    text-align: left;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+input[type="text"],
+input[type="password"] {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background-color: #5D4D42;
+    color: #F5EEDB;
+    font-size: 15px;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+input[type="text"]::placeholder,
+input[type="password"]::placeholder {
+    color: rgba(245, 238, 219, 0.45);
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus {
+    border: 1px solid #D97706;
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.18);
+}
+
+button[type="submit"] {
+    margin-top: 20px;
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    background-color: #D97706;
+    color: #1A1614;
+    font-weight: bold;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+button[type="submit"]:hover {
+    background-color: #b86005;
+    transform: translateY(-1px);
+}
+
+.login-error {
+    background-color: rgba(110, 54, 44, 0.4);
+    color: #EACEC9;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    margin: 10px 0 6px;
+    text-align: left;
+}
+
+@media (max-width: 576px) {
+    body {
+        padding: 16px;
+        align-items: flex-start;
+    }
+
+    .login-box {
+        padding: 28px 20px;
+        border-radius: 12px;
+        margin: auto 0;
+    }
+
+    .logo-container {
+        margin-bottom: 18px;
+    }
+
+    .logo-img {
+        width: 120px;
+        height: 120px;
+    }
+
+    label {
+        font-size: 14px;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    button[type="submit"] {
+        min-height: 42px;
+        font-size: 15px;
+    }
+}
