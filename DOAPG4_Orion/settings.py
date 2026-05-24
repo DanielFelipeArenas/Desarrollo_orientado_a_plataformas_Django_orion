@@ -21,7 +21,6 @@ env = environ.Env(
     DEBUG=(bool, True)
 )
 
-# Intenta leer un archivo .env si existe locally
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-wxm(1#*!laxt2!w*wxefziwtn$--23^aj+l$b)lj%q!4f-0!51')
@@ -32,6 +31,7 @@ ALLOWED_HOSTS = []
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+    CSRF_TRUSTED_ORIGINS = [f'https://{RENDER_EXTERNAL_HOSTNAME}']
  
 INSTALLED_APPS = [
     'django.contrib.admin',
