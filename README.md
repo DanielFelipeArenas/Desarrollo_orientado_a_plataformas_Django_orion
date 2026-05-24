@@ -18,7 +18,7 @@ Multas y Sanciones: Sistema automático (o manual) para la gestión de recargos 
 
 Lenguaje: Python
 
-Base de Datos: SQLite
+Base de Datos: Postgresql
 
 Framework: Django
 

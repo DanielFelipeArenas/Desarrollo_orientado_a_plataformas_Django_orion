@@ -20,14 +20,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(
     DEBUG=(bool, False)
 )
+
 # Intenta leer un archivo .env si existe locally
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-wxm(1#*!laxt2!w*wxefziwtn$--23^aj+l$b)lj%q!4f-0!51')
 
-DEBUG = env('DEBUG', default=True)
+DEBUG = 'RENDER' not in os.environ
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
+ALLOWED_HOSTS = []
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
  
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -44,6 +48,7 @@ INSTALLED_APPS = [
  
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'DOAPG4_Orion.cors.ApiCorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -99,6 +104,10 @@ USE_L10N = True
 USE_TZ = True
  
 STATIC_URL = 'static/'
+if not DEBUG:
+    STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+    
 STATICFILES_DIRS = [BASE_DIR / 'static']
  
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
