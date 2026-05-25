@@ -64,6 +64,13 @@ class ObtenerTokenView(APIView):
             if user_by_email:
                 user = authenticate(username=user_by_email.username, password=password)
 
+        # Intento por first_name
+        if user is None:
+            from django.contrib.auth.models import User as DjangoUser
+            user_by_name = DjangoUser.objects.filter(first_name__iexact=username).first()
+            if user_by_name:
+                user = authenticate(username=user_by_name.username, password=password)
+
         if user is None or not user.is_active:
             return Response(
                 {'error': 'Credenciales inválidas.'},
@@ -79,7 +86,6 @@ class ObtenerTokenView(APIView):
             'nombre':   user.get_full_name() or user.username,
             'is_admin': user.is_superuser,
         })
-
 
 class ObtenerTokenPorTipoView(APIView):
     permission_classes = []
