@@ -34,6 +34,8 @@ from .serializers import (
     RegistroUsuarioAPISerializer, ReservaLibroSerializer,
     ValoracionLibroSerializer, ConfiguracionPublicaSerializer,
 )
+
+# Importar la función de auditoría desde views.py
 from .views import registrar_auditoria
 
 
@@ -79,6 +81,13 @@ class ObtenerTokenView(APIView):
             )
 
         token, _ = Token.objects.get_or_create(user=user)
+        
+        # Registrar login en auditoría
+        registrar_auditoria(
+            request, 'auth_user', user.id, 'LOGIN', f'{user.username} via API',
+            datos_nuevos={'username': user.username, 'email': user.email},
+        )
+        
         return Response({
             'token':    token.key,
             'user_id':  user.id,
@@ -107,11 +116,18 @@ class ObtenerTokenPorTipoView(APIView):
 
         if user is None or not user.is_active:
             return Response(
-                {'error': 'Credenciales invÃ¡lidas.'},
+                {'error': 'Credenciales inválidas.'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
         token, _ = Token.objects.get_or_create(user=user)
+        
+        # Registrar login en auditoría
+        registrar_auditoria(
+            request, 'auth_user', user.id, 'LOGIN', f'{user.username} via API ({tipo})',
+            datos_nuevos={'username': user.username, 'tipo': tipo},
+        )
+        
         return Response({
             'token': token.key,
             'user_id': user.id,
@@ -190,17 +206,17 @@ class ObtenerTokenPorTipoView(APIView):
                 changed = True
             if changed:
                 user.save()
-        return authenticate(username=user.username, password=password)
+        return user
 
 
-class CerrarSesionAPIView(APIView):
-    """
-    POST /api/v1/auth/logout/
-    Invalida el token actual del usuario autenticado.
-    """
+class CerrarSesionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        # Registrar logout en auditoría
+        registrar_auditoria(
+            request, 'auth_user', request.user.id, 'LOGOUT', f'{request.user.username} via API',
+        )
         request.user.auth_token.delete()
         return Response({'detail': 'Sesión cerrada correctamente.'})
 
@@ -266,11 +282,14 @@ class RegistroUsuarioAPIView(APIView):
             email=data['email'],
             telefono=data['telefono'],
         )
-        token, _ = Token.objects.get_or_create(user=user)
+        
+        # Registrar en auditoría
         registrar_auditoria(
             request, 'Usuario', usuario.id, 'CREATE', str(usuario),
-            datos_nuevos={'nombre': usuario.nombre, 'email': usuario.email, 'telefono': usuario.telefono},
+            datos_nuevos={'nombre': data['nombre'], 'email': data['email'], 'telefono': data['telefono']},
         )
+        
+        token, _ = Token.objects.get_or_create(user=user)
         return Response({
             'token': token.key,
             'user_id': user.id,
@@ -325,6 +344,30 @@ class AutorViewSet(viewsets.ModelViewSet):
     filter_backends    = [filters.SearchFilter]
     search_fields      = ['nombre']
 
+    def perform_create(self, serializer):
+        autor = serializer.save()
+        registrar_auditoria(
+            self.request, 'Autor', autor.id, 'CREATE', str(autor),
+            datos_nuevos={'nombre': autor.nombre},
+        )
+
+    def perform_update(self, serializer):
+        autor = serializer.instance
+        datos_ant = {'nombre': autor.nombre}
+        autor = serializer.save()
+        registrar_auditoria(
+            self.request, 'Autor', autor.id, 'UPDATE', str(autor),
+            datos_anteriores=datos_ant,
+            datos_nuevos={'nombre': autor.nombre},
+        )
+
+    def perform_destroy(self, instance):
+        registrar_auditoria(
+            self.request, 'Autor', instance.id, 'DELETE', str(instance),
+            datos_anteriores={'nombre': instance.nombre},
+        )
+        instance.delete()
+
 
 class GeneroViewSet(viewsets.ModelViewSet):
     queryset           = Genero.objects.all()
@@ -332,6 +375,30 @@ class GeneroViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends    = [filters.SearchFilter]
     search_fields      = ['nombre']
+
+    def perform_create(self, serializer):
+        genero = serializer.save()
+        registrar_auditoria(
+            self.request, 'Genero', genero.id, 'CREATE', str(genero),
+            datos_nuevos={'nombre': genero.nombre},
+        )
+
+    def perform_update(self, serializer):
+        genero = serializer.instance
+        datos_ant = {'nombre': genero.nombre}
+        genero = serializer.save()
+        registrar_auditoria(
+            self.request, 'Genero', genero.id, 'UPDATE', str(genero),
+            datos_anteriores=datos_ant,
+            datos_nuevos={'nombre': genero.nombre},
+        )
+
+    def perform_destroy(self, instance):
+        registrar_auditoria(
+            self.request, 'Genero', instance.id, 'DELETE', str(instance),
+            datos_anteriores={'nombre': instance.nombre},
+        )
+        instance.delete()
 
 
 # ─────────────────────────────────────────────
@@ -361,6 +428,39 @@ class LibroViewSet(viewsets.ModelViewSet):
             return LibroWriteSerializer
         return LibroSerializer
 
+    def perform_create(self, serializer):
+        libro = serializer.save()
+        registrar_auditoria(
+            self.request, 'Libro', libro.id, 'CREATE', str(libro),
+            datos_nuevos={'titulo': libro.titulo, 'isbn': libro.isbn_13 or libro.isbn_10},
+        )
+
+    def perform_update(self, serializer):
+        libro = serializer.instance
+        datos_ant = {'titulo': libro.titulo, 'disponibles': libro.cantidad_disponible}
+        libro = serializer.save()
+        registrar_auditoria(
+            self.request, 'Libro', libro.id, 'UPDATE', str(libro),
+            datos_anteriores=datos_ant,
+            datos_nuevos={'titulo': libro.titulo, 'disponibles': libro.cantidad_disponible},
+        )
+
+    def perform_destroy(self, instance):
+        # Verificar si tiene préstamos activos
+        if DetallePrestamo.objects.filter(
+            libro=instance,
+            prestamo__estado__in=['Activo', 'Retraso'],
+            devuelto=False
+        ).exists():
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError('No se puede eliminar: el libro tiene préstamos activos.')
+        
+        registrar_auditoria(
+            self.request, 'Libro', instance.id, 'DELETE', str(instance),
+            datos_anteriores={'titulo': instance.titulo, 'isbn': instance.isbn_13 or instance.isbn_10},
+        )
+        instance.delete()
+
     @action(detail=False, methods=['post'])
     def importar(self, request):
         """
@@ -372,6 +472,13 @@ class LibroViewSet(viewsets.ModelViewSet):
         query    = request.data.get('query', 'ingenieria de sistemas')
         cantidad = int(request.data.get('cantidad', 20))
         nuevos   = GoogleBooksService.solicitar_mas_libros(query=query, cantidad=cantidad)
+        
+        # Registrar importación en auditoría
+        registrar_auditoria(
+            request, 'Libro', None, 'IMPORT', f'Importados {nuevos} libros',
+            datos_nuevos={'query': query, 'cantidad_importada': nuevos},
+        )
+        
         return Response({
             'libros_importados': nuevos,
             'mensaje': f'Se importaron {nuevos} libro(s) nuevo(s) con el término "{query}".',
@@ -396,6 +503,23 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     filter_backends    = [filters.SearchFilter]
     search_fields      = ['nombre', 'email']
 
+    def perform_create(self, serializer):
+        usuario = serializer.save()
+        registrar_auditoria(
+            self.request, 'Usuario', usuario.id, 'CREATE', str(usuario),
+            datos_nuevos={'nombre': usuario.nombre, 'email': usuario.email},
+        )
+
+    def perform_update(self, serializer):
+        usuario = serializer.instance
+        datos_ant = {'nombre': usuario.nombre, 'email': usuario.email}
+        usuario = serializer.save()
+        registrar_auditoria(
+            self.request, 'Usuario', usuario.id, 'UPDATE', str(usuario),
+            datos_anteriores=datos_ant,
+            datos_nuevos={'nombre': usuario.nombre, 'email': usuario.email},
+        )
+
     def destroy(self, request, *args, **kwargs):
         usuario = self.get_object()
         from .models import Prestamo
@@ -404,11 +528,14 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                 {'error': 'El usuario tiene préstamos activos. Procese las devoluciones primero.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        # Soft-delete
+        
+        # Registrar antes de soft-delete
         registrar_auditoria(
             request, 'Usuario', usuario.id, 'DELETE', str(usuario),
             datos_anteriores={'nombre': usuario.nombre, 'email': usuario.email},
         )
+        
+        # Soft-delete
         usuario.activo = False
         usuario.save(update_fields=['activo'])
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -421,6 +548,23 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
     filter_backends    = [filters.SearchFilter]
     search_fields      = ['nombre', 'email']
 
+    def perform_create(self, serializer):
+        empleado = serializer.save()
+        registrar_auditoria(
+            self.request, 'Empleado', empleado.id, 'CREATE', str(empleado),
+            datos_nuevos={'nombre': empleado.nombre, 'email': empleado.email},
+        )
+
+    def perform_update(self, serializer):
+        empleado = serializer.instance
+        datos_ant = {'nombre': empleado.nombre, 'email': empleado.email}
+        empleado = serializer.save()
+        registrar_auditoria(
+            self.request, 'Empleado', empleado.id, 'UPDATE', str(empleado),
+            datos_anteriores=datos_ant,
+            datos_nuevos={'nombre': empleado.nombre, 'email': empleado.email},
+        )
+
     def destroy(self, request, *args, **kwargs):
         empleado = self.get_object()
         if Prestamo.objects.filter(empleado=empleado, estado__in=['Activo', 'Retraso']).exists():
@@ -428,10 +572,13 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
                 {'error': 'El empleado tiene préstamos activos asignados.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # Registrar antes de soft-delete
         registrar_auditoria(
             request, 'Empleado', empleado.id, 'DELETE', str(empleado),
             datos_anteriores={'nombre': empleado.nombre, 'email': empleado.email},
         )
+        
         empleado.activo = False
         empleado.save(update_fields=['activo'])
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -462,6 +609,27 @@ class PrestamoViewSet(viewsets.ModelViewSet):
             return PrestamoCreateSerializer
         return PrestamoSerializer
 
+    def perform_create(self, serializer):
+        prestamo = serializer.save()
+        registrar_auditoria(
+            self.request, 'Prestamo', prestamo.id, 'CREATE', str(prestamo),
+            datos_nuevos={
+                'usuario': prestamo.usuario.nombre if prestamo.usuario else None,
+                'fecha_limite': str(prestamo.fecha_limite),
+                'libros': prestamo.libros_resumen,
+            },
+        )
+
+    def perform_update(self, serializer):
+        prestamo = serializer.instance
+        datos_ant = {'estado': prestamo.estado, 'fecha_limite': str(prestamo.fecha_limite)}
+        prestamo = serializer.save()
+        registrar_auditoria(
+            self.request, 'Prestamo', prestamo.id, 'UPDATE', str(prestamo),
+            datos_anteriores=datos_ant,
+            datos_nuevos={'estado': prestamo.estado, 'fecha_limite': str(prestamo.fecha_limite)},
+        )
+
     def destroy(self, request, *args, **kwargs):
         prestamo = self.get_object()
         if prestamo.estado != 'Devuelto':
@@ -469,6 +637,12 @@ class PrestamoViewSet(viewsets.ModelViewSet):
                 {'error': 'Solo se pueden eliminar préstamos con estado "Devuelto".'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        registrar_auditoria(
+            request, 'Prestamo', prestamo.id, 'DELETE', str(prestamo),
+            datos_anteriores={'usuario': prestamo.usuario.nombre if prestamo.usuario else None, 'estado': prestamo.estado},
+        )
+        
         return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'])
@@ -484,6 +658,7 @@ class PrestamoViewSet(viewsets.ModelViewSet):
             )
 
         hoy = timezone.now().date()
+        estado_anterior = prestamo.estado
         prestamo.estado = 'Devuelto'
         prestamo.save(update_fields=['estado'])
 
@@ -506,15 +681,18 @@ class PrestamoViewSet(viewsets.ModelViewSet):
             multa.save(update_fields=['monto'])
 
         usuario_nombre = prestamo.usuario.nombre if prestamo.usuario else 'Eliminado'
+        
+        # Registrar devolución en auditoría
+        registrar_auditoria(
+            request, 'Prestamo', prestamo.id, 'DEVOLVER', str(prestamo),
+            datos_anteriores={'estado': estado_anterior},
+            datos_nuevos={'estado': 'Devuelto', 'fecha_devolucion': str(hoy), 'multa': multa is not None},
+        )
+        
         Historial.objects.create(
             tipo_accion='Devolucion',
             descripcion=f'{usuario_nombre} devolvió "{prestamo.libros_resumen}" el {hoy}.',
             prestamo=prestamo,
-        )
-        registrar_auditoria(
-            request, 'Prestamo', prestamo.id, 'UPDATE', f'Prestamo #{prestamo.id}',
-            datos_anteriores={'estado': 'Activo/Retraso'},
-            datos_nuevos={'estado': 'Devuelto', 'fecha_devolucion': str(hoy), 'usuario': usuario_nombre},
         )
         return Response({'detail': 'Préstamo devuelto correctamente.',
                          'multa_pendiente': multa is not None})
@@ -531,6 +709,34 @@ class MultaViewSet(viewsets.ModelViewSet):
     filter_backends    = [filters.SearchFilter]
     search_fields      = ['estado', 'prestamo__usuario__nombre']
 
+    def perform_create(self, serializer):
+        multa = serializer.save()
+        registrar_auditoria(
+            self.request, 'Multa', multa.id, 'CREATE', str(multa),
+            datos_nuevos={
+                'monto': float(multa.monto),
+                'motivo': multa.motivo,
+                'usuario': multa.prestamo.usuario.nombre if multa.prestamo and multa.prestamo.usuario else None,
+            },
+        )
+
+    def perform_update(self, serializer):
+        multa = serializer.instance
+        datos_ant = {'estado': multa.estado, 'monto': float(multa.monto)}
+        multa = serializer.save()
+        registrar_auditoria(
+            self.request, 'Multa', multa.id, 'UPDATE', str(multa),
+            datos_anteriores=datos_ant,
+            datos_nuevos={'estado': multa.estado, 'monto': float(multa.monto)},
+        )
+
+    def perform_destroy(self, instance):
+        registrar_auditoria(
+            self.request, 'Multa', instance.id, 'DELETE', str(instance),
+            datos_anteriores={'estado': instance.estado, 'monto': float(instance.monto)},
+        )
+        instance.delete()
+
     @action(detail=True, methods=['post'])
     def pagar(self, request, pk=None):
         """POST /api/v1/multas/{id}/pagar/"""
@@ -541,19 +747,22 @@ class MultaViewSet(viewsets.ModelViewSet):
         if multa.estado == 'Pagada':
             return Response({'error': 'Esta multa ya fue pagada.'}, status=400)
 
+        estado_anterior = multa.estado
         multa.estado     = 'Pagada'
         multa.fecha_pago = hoy
         multa.save(update_fields=['estado', 'fecha_pago'])
+
+        # Registrar pago en auditoría
+        registrar_auditoria(
+            request, 'Multa', multa.id, 'PAGAR', str(multa),
+            datos_anteriores={'estado': estado_anterior},
+            datos_nuevos={'estado': 'Pagada', 'fecha_pago': str(hoy)},
+        )
 
         Historial.objects.create(
             tipo_accion='Multa',
             descripcion=f'Multa #{multa.id} de ${multa.monto} pagada el {hoy} vía API.',
             prestamo=multa.prestamo,
-        )
-        registrar_auditoria(
-            request, 'Multa', multa.id, 'UPDATE', f'Multa #{multa.id}',
-            datos_anteriores={'estado': 'Pendiente'},
-            datos_nuevos={'estado': 'Pagada', 'fecha_pago': str(hoy), 'monto': float(multa.monto)},
         )
         return Response({'detail': 'Multa pagada correctamente.'})
 
@@ -708,14 +917,21 @@ class ClientePrestamosAPIView(APIView):
                 usuario=usuario, libro=libro, estado='Apartado'
             ).update(estado='Convertido')
 
+        # Registrar préstamo en auditoría
+        registrar_auditoria(
+            request, 'Prestamo', prestamo.id, 'CREATE', str(prestamo),
+            datos_nuevos={
+                'usuario': usuario.nombre,
+                'libro': libro.titulo,
+                'fecha_limite': str(fecha_limite),
+                'via': 'API_CLIENTE',
+            },
+        )
+
         Historial.objects.create(
             tipo_accion='Prestamo',
             descripcion=f'{usuario.nombre} solicito "{libro.titulo}" via API. Vence el {fecha_limite}.',
             prestamo=prestamo,
-        )
-        registrar_auditoria(
-            request, 'Prestamo', prestamo.id, 'CREATE', f'Prestamo #{prestamo.id}',
-            datos_nuevos={'usuario': usuario.nombre, 'libro': libro.titulo, 'fecha_limite': str(fecha_limite)},
         )
         _notificar('prestamo_creado')
         return Response({
@@ -758,11 +974,15 @@ class ClienteReservasAPIView(APIView):
         ).first()
         if reserva:
             return Response({'detail': 'Ya estas en la cola para este libro.', 'reserva': ReservaLibroSerializer(reserva).data})
+        
         reserva = ReservaLibro.objects.create(usuario=usuario, libro=libro, estado='En cola')
+        
+        # Registrar reserva en auditoría
         registrar_auditoria(
             request, 'ReservaLibro', reserva.id, 'CREATE', str(reserva),
             datos_nuevos={'usuario': usuario.nombre, 'libro': libro.titulo, 'estado': 'En cola'},
         )
+        
         _notificar('reserva_creada')
         return Response({
             'detail': 'Reserva creada. Estate atento a tu dashboard para pedirlo cuando este apartado.',
@@ -819,7 +1039,8 @@ class ClienteValoracionesAPIView(APIView):
             puntaje = 0
         if puntaje < 1 or puntaje > 5:
             return Response({'error': 'La valoracion debe estar entre 1 y 5.'}, status=400)
-        valoracion, _ = ValoracionLibro.objects.update_or_create(
+        
+        valoracion, created = ValoracionLibro.objects.update_or_create(
             usuario=usuario,
             libro=libro,
             defaults={
@@ -827,9 +1048,13 @@ class ClienteValoracionesAPIView(APIView):
                 'comentario': request.data.get('comentario', ''),
             },
         )
+        
+        # Registrar valoración en auditoría
+        accion = 'CREATE' if created else 'UPDATE'
         registrar_auditoria(
-            request, 'ValoracionLibro', valoracion.id, 'CREATE', str(valoracion),
+            request, 'ValoracionLibro', valoracion.id, accion, str(valoracion),
             datos_nuevos={'usuario': usuario.nombre, 'libro': libro.titulo, 'puntaje': puntaje},
         )
+        
         _notificar('valoracion_creada')
         return Response(ValoracionLibroSerializer(valoracion).data, status=201)
