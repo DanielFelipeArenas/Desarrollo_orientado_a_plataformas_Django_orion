@@ -40,15 +40,32 @@ from .serializers import (
 #  UTILIDADES DE AUDITORÍA (importadas desde views)
 # ─────────────────────────────────────────────
 
+# ─────────────────────────────────────────────
+#  UTILIDADES DE AUDITORÍA (importadas desde views)
+# ─────────────────────────────────────────────
+
 def _registrar_auditoria_api(request, tabla, objeto_id, accion,
                               repr_objeto='', datos_anteriores=None, datos_nuevos=None):
-    """Wrapper que reutiliza la lógica de views.py sin importar el módulo completo."""
+    """Wrapper que reutiliza la lógica de views.py asegurando el mapeo de kwargs."""
     try:
         from .views import registrar_auditoria
-        registrar_auditoria(request, tabla, objeto_id, accion,
-                            repr_objeto, datos_anteriores, datos_nuevos)
-    except Exception:
-        pass
+        # Pasamos los parámetros opcionales explícitamente por nombre
+        # Esto evita cualquier conflicto si el orden de la firma en views.py varía
+        registrar_auditoria(
+            request, 
+            tabla, 
+            objeto_id, 
+            accion,
+            repr_objeto=repr_objeto,
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=datos_nuevos
+        )
+    except Exception as e:
+        # En lugar de un 'pass' vacío, registramos el error en la consola
+        # para saber exactamente qué está fallando dentro de views.py
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error en registrar_auditoria para {tabla} [{accion}]: {e}", exc_info=True)
 
 # ─────────────────────────────────────────────
 #  AUTENTICACIÓN  (Token para Flutter)
