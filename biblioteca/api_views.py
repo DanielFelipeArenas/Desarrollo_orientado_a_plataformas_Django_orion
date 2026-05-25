@@ -99,6 +99,44 @@ def _registrar_auditoria_api(
 #  AUTENTICACIÓN  (Token para Flutter)
 # ─────────────────────────────────────────────
 
+def _get_client_ip_api(request):
+    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if forwarded_for:
+        return forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
+
+
+def _registrar_auditoria_api_usuario(
+    request,
+    user,
+    tabla,
+    objeto_id,
+    accion,
+    repr_objeto='',
+    datos_anteriores=None,
+    datos_nuevos=None,
+):
+    try:
+        AuditLog.objects.create(
+            tabla=tabla,
+            objeto_id=objeto_id,
+            objeto_repr=str(repr_objeto)[:255],
+            accion=accion,
+            datos_anteriores=_serializar_para_auditoria(datos_anteriores),
+            datos_nuevos=_serializar_para_auditoria(datos_nuevos),
+            usuario=user if user and user.is_authenticated else None,
+            empleado_nombre=(
+                user.get_full_name() or user.username
+                if user and user.is_authenticated else ''
+            ),
+            ip_address=_get_client_ip_api(request) or None,
+        )
+    except Exception as e:
+        logger.exception(
+            f"ERROR AUDITORIA DIRECTA [{tabla}] [{accion}] [{objeto_id}]: {e}"
+        )
+
+
 class ObtenerTokenView(APIView):
     """
     POST /api/v1/auth/token/
@@ -137,6 +175,19 @@ class ObtenerTokenView(APIView):
             )
 
         token, _ = Token.objects.get_or_create(user=user)
+        _registrar_auditoria_api_usuario(
+            request=request,
+            user=user,
+            tabla='auth',
+            objeto_id=user.id,
+            accion='LOGIN',
+            repr_objeto=str(user),
+            datos_nuevos={
+                'origen': 'api_flutter',
+                'username': user.username,
+                'email': user.email,
+            },
+        )
         return Response({
             'token':    token.key,
             'user_id':  user.id,
@@ -170,6 +221,20 @@ class ObtenerTokenPorTipoView(APIView):
             )
 
         token, _ = Token.objects.get_or_create(user=user)
+        _registrar_auditoria_api_usuario(
+            request=request,
+            user=user,
+            tabla='auth',
+            objeto_id=user.id,
+            accion='LOGIN',
+            repr_objeto=str(user),
+            datos_nuevos={
+                'origen': 'api_flutter',
+                'tipo': tipo,
+                'username': user.username,
+                'email': user.email,
+            },
+        )
         return Response({
             'token': token.key,
             'user_id': user.id,
@@ -492,6 +557,21 @@ class LibroViewSet(viewsets.ModelViewSet):
         nuevos = GoogleBooksService.solicitar_mas_libros(
             query=query,
             cantidad=cantidad
+        )
+
+        _registrar_auditoria_api(
+            request=request,
+            tabla='Libro',
+            objeto_id=None,
+            accion='CREATE',
+            repr_objeto=f'Importacion de libros: {query}',
+            datos_nuevos={
+                'origen': 'api_flutter',
+                'accion': 'importar_libros',
+                'query': query,
+                'cantidad_solicitada': cantidad,
+                'libros_importados': nuevos,
+            },
         )
 
         return Response({
