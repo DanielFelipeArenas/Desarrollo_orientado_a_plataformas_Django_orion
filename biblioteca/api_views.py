@@ -454,19 +454,31 @@ class LibroViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
-        libro = serializer.save()
-        _registrar_auditoria_api(
-            self.request, 'Libro', libro.id, 'CREATE', str(libro),
-            datos_nuevos={'titulo': libro.titulo},
+        instance = serializer.save()
+        registrar_auditoria(
+            request=self.request,
+            tabla='Libro',
+            objeto_id=instance.id,
+            accion='CREATE',
+            repr_objeto=f"Libro: {instance.titulo}",
+            datos_nuevos=serializer.data
         )
 
     def perform_update(self, serializer):
-        ant = {'titulo': serializer.instance.titulo}
-        libro = serializer.save()
-        _registrar_auditoria_api(
-            self.request, 'Libro', libro.id, 'UPDATE', str(libro),
-            datos_anteriores=ant,
-            datos_nuevos={'titulo': libro.titulo},
+        anterior = self.get_object()
+        datos_anteriores = {
+            'titulo': anterior.titulo,
+            'cantidad_total': anterior.cantidad_total
+        }
+        instance = serializer.save()
+        registrar_auditoria(
+            request=self.request,
+            tabla='Libro',
+            objeto_id=instance.id,
+            accion='UPDATE',
+            repr_objeto=f"Libro: {instance.titulo}",
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=serializer.data
         )
 
     def perform_destroy(self, instance):
@@ -489,19 +501,40 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     search_fields      = ['nombre', 'email']
 
     def perform_create(self, serializer):
-        obj = serializer.save()
-        _registrar_auditoria_api(
-            self.request, 'Usuario', obj.id, 'CREATE', str(obj),
-            datos_nuevos={'nombre': obj.nombre, 'email': obj.email},
+        instance = serializer.save()
+        registrar_auditoria(
+            request=self.request,
+            tabla='Usuario',
+            objeto_id=instance.id,
+            accion='CREATE',
+            repr_objeto=f"Lector: {instance.user.username if instance.user else instance.id}",
+            datos_nuevos=serializer.data
         )
 
     def perform_update(self, serializer):
-        ant = {'nombre': serializer.instance.nombre, 'email': serializer.instance.email}
-        obj = serializer.save()
-        _registrar_auditoria_api(
-            self.request, 'Usuario', obj.id, 'UPDATE', str(obj),
-            datos_anteriores=ant,
-            datos_nuevos={'nombre': obj.nombre, 'email': obj.email},
+        anterior = self.get_object()
+        datos_anteriores = {'telefono': anterior.telefono, 'direccion': anterior.direccion, 'estado_cuenta': anterior.estado_cuenta}
+        instance = serializer.save()
+        registrar_auditoria(
+            request=self.request,
+            tabla='Usuario',
+            objeto_id=instance.id,
+            accion='UPDATE',
+            repr_objeto=f"Lector: {instance.user.username if instance.user else instance.id}",
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=serializer.data
+        )
+
+    def perform_destroy(self, instance):
+        id_borrado = instance.id
+        username = instance.user.username if instance.user else f"ID {id_borrado}"
+        instance.delete()
+        registrar_auditoria(
+            request=self.request,
+            tabla='Usuario',
+            objeto_id=id_borrado,
+            accion='DELETE',
+            repr_objeto=f"Lector eliminado: {username}"
         )
 
     def destroy(self, request, *args, **kwargs):
@@ -525,19 +558,40 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
     search_fields      = ['nombre', 'email']
 
     def perform_create(self, serializer):
-        obj = serializer.save()
-        _registrar_auditoria_api(
-            self.request, 'Empleado', obj.id, 'CREATE', str(obj),
-            datos_nuevos={'nombre': obj.nombre, 'email': obj.email},
+        instance = serializer.save()
+        registrar_auditoria(
+            request=self.request,
+            tabla='Empleado',
+            objeto_id=instance.id,
+            accion='CREATE',
+            repr_objeto=f"Empleado: {instance.user.username if instance.user else instance.id}",
+            datos_nuevos=serializer.data
         )
 
     def perform_update(self, serializer):
-        ant = {'nombre': serializer.instance.nombre, 'email': serializer.instance.email}
-        obj = serializer.save()
-        _registrar_auditoria_api(
-            self.request, 'Empleado', obj.id, 'UPDATE', str(obj),
-            datos_anteriores=ant,
-            datos_nuevos={'nombre': obj.nombre, 'email': obj.email},
+        anterior = self.get_object()
+        datos_anteriores = {'cargo': anterior.cargo, 'telefono': anterior.telefono}
+        instance = serializer.save()
+        registrar_auditoria(
+            request=self.request,
+            tabla='Empleado',
+            objeto_id=instance.id,
+            accion='UPDATE',
+            repr_objeto=f"Empleado: {instance.user.username if instance.user else instance.id}",
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=serializer.data
+        )
+
+    def perform_destroy(self, instance):
+        id_borrado = instance.id
+        username = instance.user.username if instance.user else f"ID {id_borrado}"
+        instance.delete()
+        registrar_auditoria(
+            request=self.request,
+            tabla='Empleado',
+            objeto_id=id_borrado,
+            accion='DELETE',
+            repr_objeto=f"Empleado eliminado: {username}"
         )
 
     def destroy(self, request, *args, **kwargs):
@@ -582,24 +636,53 @@ class PrestamoViewSet(viewsets.ModelViewSet):
         return PrestamoSerializer
 
     def perform_create(self, serializer):
-        prestamo = serializer.save()
-        usuario_nombre = prestamo.usuario.nombre if prestamo.usuario else 'Desconocido'
-        _registrar_auditoria_api(
-            self.request, 'Prestamo', prestamo.id, 'CREATE', str(prestamo),
-            datos_nuevos={
-                'usuario': usuario_nombre,
-                'fecha_limite': str(prestamo.fecha_limite),
-                'estado': prestamo.estado,
-            },
+        # 1. Guarda el objeto primero
+        instance = serializer.save()
+        
+        # 2. Registra la auditoría usando el request de la API
+        registrar_auditoria(
+            request=self.request,
+            tabla='Prestamo',
+            objeto_id=instance.id,
+            accion='CREATE',
+            repr_objeto=f"Prestamo #{instance.id} - Usuario: {instance.usuario.user.username if instance.usuario else 'Desconocido'}",
+            datos_nuevos=serializer.data
         )
 
     def perform_update(self, serializer):
-        ant = {'estado': serializer.instance.estado}
-        prestamo = serializer.save()
-        _registrar_auditoria_api(
-            self.request, 'Prestamo', prestamo.id, 'UPDATE', str(prestamo),
-            datos_anteriores=ant,
-            datos_nuevos={'estado': prestamo.estado},
+        # 1. Capturamos los datos anteriores antes de actualizar
+        ancestor = self.get_object()
+        # Puedes usar un mapeo simple o serializar el estado previo si lo requieres
+        datos_anteriores = {'estado': ancestor.estado, 'fecha_limite': str(ancestor.fecha_limite)}
+        
+        # 2. Guarda los cambios
+        instance = serializer.save()
+        
+        # 3. Registra la auditoría de la modificación
+        registrar_auditoria(
+            request=self.request,
+            tabla='Prestamo',
+            objeto_id=instance.id,
+            accion='UPDATE',
+            repr_objeto=f"Prestamo #{instance.id} modificado desde Flutter",
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=serializer.data
+        )
+
+    def perform_destroy(self, instance):
+        objeto_id = instance.id
+        repr_obj = f"Prestamo #{objeto_id} eliminado"
+        
+        # 1. Ejecuta la eliminación física/lógica
+        instance.delete()
+        
+        # 2. Registra la auditoría de la eliminación
+        registrar_auditoria(
+            request=self.request,
+            tabla='Prestamo',
+            objeto_id=objeto_id,
+            accion='DELETE',
+            repr_objeto=repr_obj
         )
 
     def destroy(self, request, *args, **kwargs):
@@ -675,23 +758,42 @@ class MultaViewSet(viewsets.ModelViewSet):
     search_fields      = ['estado', 'prestamo__usuario__nombre']
 
     def perform_create(self, serializer):
-        multa = serializer.save()
-        _registrar_auditoria_api(
-            self.request, 'Multa', multa.id, 'CREATE', str(multa),
-            datos_nuevos={
-                'monto': float(multa.monto),
-                'estado': multa.estado,
-                'motivo': multa.motivo if hasattr(multa, 'motivo') else '',
-            },
+        instance = serializer.save()
+        registrar_auditoria(
+            request=self.request,
+            tabla='Multa',
+            objeto_id=instance.id,
+            accion='CREATE',
+            repr_objeto=f"Multa #{instance.id}",
+            datos_nuevos=serializer.data
         )
 
     def perform_update(self, serializer):
-        ant = {'estado': serializer.instance.estado, 'monto': float(serializer.instance.monto)}
-        multa = serializer.save()
-        _registrar_auditoria_api(
-            self.request, 'Multa', multa.id, 'UPDATE', str(multa),
-            datos_anteriores=ant,
-            datos_nuevos={'estado': multa.estado, 'monto': float(multa.monto)},
+        anterior = self.get_object()
+        datos_anteriores = {
+            'estado': anterior.estado,
+            'monto': float(anterior.monto) if anterior.monto else 0.0
+        }
+        instance = serializer.save()
+        registrar_auditoria(
+            request=self.request,
+            tabla='Multa',
+            objeto_id=instance.id,
+            accion='UPDATE',
+            repr_objeto=f"Multa #{instance.id} modificada",
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=serializer.data
+        )
+
+    def perform_destroy(self, instance):
+        id_borrado = instance.id
+        instance.delete()
+        registrar_auditoria(
+            request=self.request,
+            tabla='Multa',
+            objeto_id=id_borrado,
+            accion='DELETE',
+            repr_objeto=f"Multa #{id_borrado} eliminada"
         )
 
     def destroy(self, request, *args, **kwargs):
@@ -739,6 +841,42 @@ class HistorialViewSet(viewsets.ReadOnlyModelViewSet):
     filter_backends    = [filters.SearchFilter]
     search_fields      = ['tipo_accion', 'descripcion']
 
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        registrar_auditoria(
+            request=self.request,
+            tabla='Historial',
+            objeto_id=instance.id,
+            accion='CREATE',
+            repr_objeto=f"Historial #{instance.id}",
+            datos_nuevos=serializer.data
+        )
+
+    def perform_update(self, serializer):
+        anterior = self.get_object()
+        datos_anteriores = {'accion': anterior.accion, 'detalles': anterior.detalles}
+        instance = serializer.save()
+        registrar_auditoria(
+            request=self.request,
+            tabla='Historial',
+            objeto_id=instance.id,
+            accion='UPDATE',
+            repr_objeto=f"Historial #{instance.id}",
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=serializer.data
+        )
+
+    def perform_destroy(self, instance):
+        id_borrado = instance.id
+        instance.delete()
+        registrar_auditoria(
+            request=self.request,
+            tabla='Historial',
+            objeto_id=id_borrado,
+            accion='DELETE',
+            repr_objeto=f"Historial #{id_borrado} eliminado"
+        )
+
 
 # ─────────────────────────────────────────────
 #  AUDITORÍA  (solo superadmin, solo lectura)
@@ -751,6 +889,18 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAdminUser]
     filter_backends    = [filters.SearchFilter]
     search_fields      = ['tabla', 'accion', 'objeto_repr', 'empleado_nombre']
+
+    def perform_destroy(self, instance):
+        id_borrado = instance.id
+        repr_obj = f"Registro de auditoría #{id_borrado} depurado/eliminado"
+        instance.delete()
+        registrar_auditoria(
+            request=self.request,
+            tabla='AuditLog',
+            objeto_id=id_borrado,
+            accion='DELETE',
+            repr_objeto=repr_obj
+        )
 
 
 # ─────────────────────────────────────────────
