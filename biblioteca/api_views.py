@@ -442,22 +442,34 @@ class GeneroViewSet(viewsets.ModelViewSet):
 # ─────────────────────────────────────────────
 
 class LibroViewSet(viewsets.ModelViewSet):
-    """
-    GET  /api/v1/libros/            → listar (con ?search=<q>)
-    POST /api/v1/libros/            → crear
-    GET  /api/v1/libros/{id}/       → detalle
-    PUT  /api/v1/libros/{id}/       → actualizar
-    DEL  /api/v1/libros/{id}/       → eliminar
 
-    Acciones extra:
-    POST /api/v1/libros/importar/   → importar 20 libros de Open Library
-    """
-    queryset           = Libro.objects.prefetch_related('autores', 'generos').all()
+    queryset = Libro.objects.prefetch_related(
+        'autores',
+        'generos'
+    ).all()
+
     permission_classes = [IsAuthenticated]
-    filter_backends    = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields      = ['titulo', 'autores__nombre', 'generos__nombre', 'isbn_13', 'isbn_10']
-    ordering_fields    = ['titulo', 'creado_en', 'cantidad_disponible']
-    ordering           = ['-creado_en']
+
+    filter_backends = [
+        filters.SearchFilter,
+        filters.OrderingFilter
+    ]
+
+    search_fields = [
+        'titulo',
+        'autores__nombre',
+        'generos__nombre',
+        'isbn_13',
+        'isbn_10'
+    ]
+
+    ordering_fields = [
+        'titulo',
+        'creado_en',
+        'cantidad_disponible'
+    ]
+
+    ordering = ['-creado_en']
 
     def get_serializer_class(self):
         if self.action in ('create', 'update', 'partial_update'):
@@ -467,9 +479,21 @@ class LibroViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def importar(self, request):
         from .services import GoogleBooksService
-        query    = request.data.get('query', 'ingenieria de sistemas')
-        cantidad = int(request.data.get('cantidad', 20))
-        nuevos   = GoogleBooksService.solicitar_mas_libros(query=query, cantidad=cantidad)
+
+        query = request.data.get(
+            'query',
+            'ingenieria de sistemas'
+        )
+
+        cantidad = int(
+            request.data.get('cantidad', 20)
+        )
+
+        nuevos = GoogleBooksService.solicitar_mas_libros(
+            query=query,
+            cantidad=cantidad
+        )
+
         return Response({
             'libros_importados': nuevos,
             'mensaje': f'Se importaron {nuevos} libro(s) nuevo(s) con el término "{query}".',
@@ -477,45 +501,75 @@ class LibroViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def disponibles(self, request):
-        qs = self.get_queryset().filter(cantidad_disponible__gt=0)
-        serializer = LibroSerializer(qs, many=True)
+        qs = self.get_queryset().filter(
+            cantidad_disponible__gt=0
+        )
+
+        serializer = LibroSerializer(
+            qs,
+            many=True
+        )
+
         return Response(serializer.data)
 
     def perform_create(self, serializer):
         instance = serializer.save()
-        registrar_auditoria(
+
+        _registrar_auditoria_api(
             request=self.request,
             tabla='Libro',
             objeto_id=instance.id,
             accion='CREATE',
-            repr_objeto=f"Libro: {instance.titulo}",
-            datos_nuevos=serializer.data
+            repr_objeto=f'Libro: {instance.titulo}',
+            datos_nuevos={
+                'titulo': instance.titulo,
+                'cantidad_total': instance.cantidad_total,
+                'cantidad_disponible': instance.cantidad_disponible,
+            }
         )
 
     def perform_update(self, serializer):
+
         anterior = self.get_object()
+
         datos_anteriores = {
             'titulo': anterior.titulo,
-            'cantidad_total': anterior.cantidad_total
+            'cantidad_total': anterior.cantidad_total,
+            'cantidad_disponible': anterior.cantidad_disponible,
         }
+
         instance = serializer.save()
-        registrar_auditoria(
+
+        _registrar_auditoria_api(
             request=self.request,
             tabla='Libro',
             objeto_id=instance.id,
             accion='UPDATE',
-            repr_objeto=f"Libro: {instance.titulo}",
+            repr_objeto=f'Libro: {instance.titulo}',
             datos_anteriores=datos_anteriores,
-            datos_nuevos=serializer.data
+            datos_nuevos={
+                'titulo': instance.titulo,
+                'cantidad_total': instance.cantidad_total,
+                'cantidad_disponible': instance.cantidad_disponible,
+            }
         )
 
     def perform_destroy(self, instance):
-        _registrar_auditoria_api(
-            self.request, 'Libro', instance.id, 'DELETE', str(instance),
-            datos_anteriores={'titulo': instance.titulo},
-        )
-        instance.delete()
 
+        _registrar_auditoria_api(
+            request=self.request,
+            tabla='Libro',
+            objeto_id=instance.id,
+            accion='DELETE',
+            repr_objeto=f'Libro: {instance.titulo}',
+            datos_anteriores={
+                'titulo': instance.titulo,
+                'cantidad_total': instance.cantidad_total,
+                'cantidad_disponible': instance.cantidad_disponible,
+            }
+        )
+
+        instance.delete()
 
 # ─────────────────────────────────────────────
 #  PERSONAS
