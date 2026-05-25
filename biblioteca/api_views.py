@@ -120,7 +120,7 @@ class ObtenerTokenPorTipoView(APIView):
 
         if user is None or not user.is_active:
             return Response(
-                {'error': 'Credenciales invÃ¡lidas.'},
+                {'error': 'Credenciales inválidas.'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
@@ -280,6 +280,12 @@ class RegistroUsuarioAPIView(APIView):
             telefono=data['telefono'],
         )
         token, _ = Token.objects.get_or_create(user=user)
+        # Auditoría: request es anónimo en este endpoint público,
+        # pero registrar_auditoria lo maneja dejando usuario=None.
+        _registrar_auditoria_api(
+            request, 'Usuario', usuario.id, 'CREATE', str(usuario),
+            datos_nuevos={'nombre': usuario.nombre, 'email': usuario.email},
+        )
         return Response({
             'token': token.key,
             'user_id': user.id,
@@ -319,20 +325,40 @@ class ConfiguracionPublicaAPIView(APIView):
         }
         return Response(ConfiguracionPublicaSerializer(data).data)
 
-#Registro
+
+# ─────────────────────────────────────────────
+#  CATÁLOGO: AUTORES Y GÉNEROS
+# ─────────────────────────────────────────────
+
 class AutorViewSet(viewsets.ModelViewSet):
-    """
-    GET    /api/v1/autores/         → listar
-    POST   /api/v1/autores/         → crear
-    GET    /api/v1/autores/{id}/    → detalle
-    PUT    /api/v1/autores/{id}/    → actualizar
-    DELETE /api/v1/autores/{id}/    → eliminar
-    """
     queryset           = Autor.objects.all()
     serializer_class   = AutorSerializer
     permission_classes = [IsAuthenticated]
     filter_backends    = [filters.SearchFilter]
     search_fields      = ['nombre']
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        _registrar_auditoria_api(
+            self.request, 'Autor', obj.id, 'CREATE', str(obj),
+            datos_nuevos={'nombre': obj.nombre},
+        )
+
+    def perform_update(self, serializer):
+        ant = {'nombre': serializer.instance.nombre}
+        obj = serializer.save()
+        _registrar_auditoria_api(
+            self.request, 'Autor', obj.id, 'UPDATE', str(obj),
+            datos_anteriores=ant,
+            datos_nuevos={'nombre': obj.nombre},
+        )
+
+    def perform_destroy(self, instance):
+        _registrar_auditoria_api(
+            self.request, 'Autor', instance.id, 'DELETE', str(instance),
+            datos_anteriores={'nombre': instance.nombre},
+        )
+        instance.delete()
 
 
 class GeneroViewSet(viewsets.ModelViewSet):
@@ -341,6 +367,29 @@ class GeneroViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends    = [filters.SearchFilter]
     search_fields      = ['nombre']
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        _registrar_auditoria_api(
+            self.request, 'Genero', obj.id, 'CREATE', str(obj),
+            datos_nuevos={'nombre': obj.nombre},
+        )
+
+    def perform_update(self, serializer):
+        ant = {'nombre': serializer.instance.nombre}
+        obj = serializer.save()
+        _registrar_auditoria_api(
+            self.request, 'Genero', obj.id, 'UPDATE', str(obj),
+            datos_anteriores=ant,
+            datos_nuevos={'nombre': obj.nombre},
+        )
+
+    def perform_destroy(self, instance):
+        _registrar_auditoria_api(
+            self.request, 'Genero', instance.id, 'DELETE', str(instance),
+            datos_anteriores={'nombre': instance.nombre},
+        )
+        instance.delete()
 
 
 # ─────────────────────────────────────────────
@@ -372,11 +421,6 @@ class LibroViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def importar(self, request):
-        """
-        POST /api/v1/libros/importar/
-        Body opcional: { "query": "...", "cantidad": 20 }
-        Importa libros adicionales desde Open Library.
-        """
         from .services import GoogleBooksService
         query    = request.data.get('query', 'ingenieria de sistemas')
         cantidad = int(request.data.get('cantidad', 20))
@@ -388,11 +432,10 @@ class LibroViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def disponibles(self, request):
-        """GET /api/v1/libros/disponibles/ → solo libros con stock > 0"""
         qs = self.get_queryset().filter(cantidad_disponible__gt=0)
         serializer = LibroSerializer(qs, many=True)
         return Response(serializer.data)
-    
+
     def perform_create(self, serializer):
         libro = serializer.save()
         _registrar_auditoria_api(
@@ -401,11 +444,11 @@ class LibroViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
-        libro_antes = {'titulo': serializer.instance.titulo}
+        ant = {'titulo': serializer.instance.titulo}
         libro = serializer.save()
         _registrar_auditoria_api(
             self.request, 'Libro', libro.id, 'UPDATE', str(libro),
-            datos_anteriores=libro_antes,
+            datos_anteriores=ant,
             datos_nuevos={'titulo': libro.titulo},
         )
 
@@ -448,7 +491,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         usuario = self.get_object()
         if Prestamo.objects.filter(usuario=usuario, estado__in=['Activo', 'Retraso']).exists():
             return Response({'error': 'El usuario tiene préstamos activos.'}, status=400)
-        _registrar_auditoria_api(           # ← AGREGAR ESTO
+        _registrar_auditoria_api(
             request, 'Usuario', usuario.id, 'DELETE', str(usuario),
             datos_anteriores={'nombre': usuario.nombre, 'email': usuario.email},
         )
@@ -464,6 +507,22 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
     filter_backends    = [filters.SearchFilter]
     search_fields      = ['nombre', 'email']
 
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        _registrar_auditoria_api(
+            self.request, 'Empleado', obj.id, 'CREATE', str(obj),
+            datos_nuevos={'nombre': obj.nombre, 'email': obj.email},
+        )
+
+    def perform_update(self, serializer):
+        ant = {'nombre': serializer.instance.nombre, 'email': serializer.instance.email}
+        obj = serializer.save()
+        _registrar_auditoria_api(
+            self.request, 'Empleado', obj.id, 'UPDATE', str(obj),
+            datos_anteriores=ant,
+            datos_nuevos={'nombre': obj.nombre, 'email': obj.email},
+        )
+
     def destroy(self, request, *args, **kwargs):
         empleado = self.get_object()
         if Prestamo.objects.filter(empleado=empleado, estado__in=['Activo', 'Retraso']).exists():
@@ -471,6 +530,10 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
                 {'error': 'El empleado tiene préstamos activos asignados.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        _registrar_auditoria_api(
+            request, 'Empleado', empleado.id, 'DELETE', str(empleado),
+            datos_anteriores={'nombre': empleado.nombre, 'email': empleado.email},
+        )
         empleado.activo = False
         empleado.save(update_fields=['activo'])
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -501,6 +564,27 @@ class PrestamoViewSet(viewsets.ModelViewSet):
             return PrestamoCreateSerializer
         return PrestamoSerializer
 
+    def perform_create(self, serializer):
+        prestamo = serializer.save()
+        usuario_nombre = prestamo.usuario.nombre if prestamo.usuario else 'Desconocido'
+        _registrar_auditoria_api(
+            self.request, 'Prestamo', prestamo.id, 'CREATE', str(prestamo),
+            datos_nuevos={
+                'usuario': usuario_nombre,
+                'fecha_limite': str(prestamo.fecha_limite),
+                'estado': prestamo.estado,
+            },
+        )
+
+    def perform_update(self, serializer):
+        ant = {'estado': serializer.instance.estado}
+        prestamo = serializer.save()
+        _registrar_auditoria_api(
+            self.request, 'Prestamo', prestamo.id, 'UPDATE', str(prestamo),
+            datos_anteriores=ant,
+            datos_nuevos={'estado': prestamo.estado},
+        )
+
     def destroy(self, request, *args, **kwargs):
         prestamo = self.get_object()
         if prestamo.estado != 'Devuelto':
@@ -508,6 +592,10 @@ class PrestamoViewSet(viewsets.ModelViewSet):
                 {'error': 'Solo se pueden eliminar préstamos con estado "Devuelto".'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        _registrar_auditoria_api(
+            request, 'Prestamo', prestamo.id, 'DELETE', str(prestamo),
+            datos_anteriores={'estado': prestamo.estado},
+        )
         return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'])
@@ -557,6 +645,7 @@ class PrestamoViewSet(viewsets.ModelViewSet):
         return Response({'detail': 'Préstamo devuelto correctamente.',
                          'multa_pendiente': multa is not None})
 
+
 # ─────────────────────────────────────────────
 #  MULTAS
 # ─────────────────────────────────────────────
@@ -567,6 +656,34 @@ class MultaViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     filter_backends    = [filters.SearchFilter]
     search_fields      = ['estado', 'prestamo__usuario__nombre']
+
+    def perform_create(self, serializer):
+        multa = serializer.save()
+        _registrar_auditoria_api(
+            self.request, 'Multa', multa.id, 'CREATE', str(multa),
+            datos_nuevos={
+                'monto': float(multa.monto),
+                'estado': multa.estado,
+                'motivo': multa.motivo if hasattr(multa, 'motivo') else '',
+            },
+        )
+
+    def perform_update(self, serializer):
+        ant = {'estado': serializer.instance.estado, 'monto': float(serializer.instance.monto)}
+        multa = serializer.save()
+        _registrar_auditoria_api(
+            self.request, 'Multa', multa.id, 'UPDATE', str(multa),
+            datos_anteriores=ant,
+            datos_nuevos={'estado': multa.estado, 'monto': float(multa.monto)},
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        multa = self.get_object()
+        _registrar_auditoria_api(
+            request, 'Multa', multa.id, 'DELETE', str(multa),
+            datos_anteriores={'estado': multa.estado, 'monto': float(multa.monto)},
+        )
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'])
     def pagar(self, request, pk=None):
@@ -587,7 +704,7 @@ class MultaViewSet(viewsets.ModelViewSet):
             descripcion=f'Multa #{multa.id} de ${multa.monto} pagada el {hoy} vía API.',
             prestamo=multa.prestamo,
         )
-        _registrar_auditoria_api(       # ← AGREGAR AL FINAL
+        _registrar_auditoria_api(
             request, 'Multa', multa.id, 'UPDATE', str(multa),
             datos_nuevos={'estado': 'Pagada', 'monto': float(multa.monto), 'fecha_pago': str(hoy)},
         )
@@ -624,10 +741,6 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 # ─────────────────────────────────────────────
 
 class DashboardAPIView(APIView):
-    """
-    GET /api/v1/dashboard/
-    Retorna un resumen con los KPIs principales del dashboard.
-    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -799,6 +912,10 @@ class ClienteReservasAPIView(APIView):
         if reserva:
             return Response({'detail': 'Ya estas en la cola para este libro.', 'reserva': ReservaLibroSerializer(reserva).data})
         reserva = ReservaLibro.objects.create(usuario=usuario, libro=libro, estado='En cola')
+        _registrar_auditoria_api(
+            request, 'ReservaLibro', reserva.id, 'CREATE', str(reserva),
+            datos_nuevos={'usuario': usuario.nombre, 'libro': libro.titulo, 'estado': 'En cola'},
+        )
         _notificar('reserva_creada')
         return Response({
             'detail': 'Reserva creada. Estate atento a tu dashboard para pedirlo cuando este apartado.',
@@ -862,6 +979,10 @@ class ClienteValoracionesAPIView(APIView):
                 'puntaje': puntaje,
                 'comentario': request.data.get('comentario', ''),
             },
+        )
+        _registrar_auditoria_api(
+            request, 'ValoracionLibro', valoracion.id, 'CREATE', str(valoracion),
+            datos_nuevos={'usuario': usuario.nombre, 'libro': libro.titulo, 'puntaje': puntaje},
         )
         _notificar('valoracion_creada')
         return Response(ValoracionLibroSerializer(valoracion).data, status=201)
