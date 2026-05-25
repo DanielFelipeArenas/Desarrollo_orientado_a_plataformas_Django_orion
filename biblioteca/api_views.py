@@ -19,6 +19,7 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 from django.db import transaction
 from django.utils import timezone
+from .views import registrar_auditoria
 
 from .models import (
     Autor, Genero, Libro, Empleado, Usuario,
@@ -34,8 +35,20 @@ from .serializers import (
     RegistroUsuarioAPISerializer, ReservaLibroSerializer,
     ValoracionLibroSerializer, ConfiguracionPublicaSerializer,
 )
-from .views import registrar_auditoria
 
+# ─────────────────────────────────────────────
+#  UTILIDADES DE AUDITORÍA (importadas desde views)
+# ─────────────────────────────────────────────
+
+def _registrar_auditoria_api(request, tabla, objeto_id, accion,
+                              repr_objeto='', datos_anteriores=None, datos_nuevos=None):
+    """Wrapper que reutiliza la lógica de views.py sin importar el módulo completo."""
+    try:
+        from .views import registrar_auditoria
+        registrar_auditoria(request, tabla, objeto_id, accion,
+                            repr_objeto, datos_anteriores, datos_nuevos)
+    except Exception:
+        pass
 
 # ─────────────────────────────────────────────
 #  AUTENTICACIÓN  (Token para Flutter)
@@ -107,7 +120,7 @@ class ObtenerTokenPorTipoView(APIView):
 
         if user is None or not user.is_active:
             return Response(
-                {'error': 'Credenciales inválidas.'},
+                {'error': 'Credenciales invÃ¡lidas.'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
@@ -267,13 +280,6 @@ class RegistroUsuarioAPIView(APIView):
             telefono=data['telefono'],
         )
         token, _ = Token.objects.get_or_create(user=user)
-        # El request es anónimo (endpoint público), así que pasamos el user
-        # recién creado para que AuditLog lo registre correctamente.
-        registrar_auditoria(
-            request, 'Usuario', usuario.id, 'CREATE', str(usuario),
-            datos_nuevos={'nombre': usuario.nombre, 'email': usuario.email, 'telefono': usuario.telefono},
-            usuario_override=user,
-        )
         return Response({
             'token': token.key,
             'user_id': user.id,
@@ -313,7 +319,7 @@ class ConfiguracionPublicaAPIView(APIView):
         }
         return Response(ConfiguracionPublicaSerializer(data).data)
 
-
+#Registro
 class AutorViewSet(viewsets.ModelViewSet):
     """
     GET    /api/v1/autores/         → listar
@@ -386,6 +392,29 @@ class LibroViewSet(viewsets.ModelViewSet):
         qs = self.get_queryset().filter(cantidad_disponible__gt=0)
         serializer = LibroSerializer(qs, many=True)
         return Response(serializer.data)
+    
+    def perform_create(self, serializer):
+        libro = serializer.save()
+        _registrar_auditoria_api(
+            self.request, 'Libro', libro.id, 'CREATE', str(libro),
+            datos_nuevos={'titulo': libro.titulo},
+        )
+
+    def perform_update(self, serializer):
+        libro_antes = {'titulo': serializer.instance.titulo}
+        libro = serializer.save()
+        _registrar_auditoria_api(
+            self.request, 'Libro', libro.id, 'UPDATE', str(libro),
+            datos_anteriores=libro_antes,
+            datos_nuevos={'titulo': libro.titulo},
+        )
+
+    def perform_destroy(self, instance):
+        _registrar_auditoria_api(
+            self.request, 'Libro', instance.id, 'DELETE', str(instance),
+            datos_anteriores={'titulo': instance.titulo},
+        )
+        instance.delete()
 
 
 # ─────────────────────────────────────────────
@@ -399,22 +428,32 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     filter_backends    = [filters.SearchFilter]
     search_fields      = ['nombre', 'email']
 
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        _registrar_auditoria_api(
+            self.request, 'Usuario', obj.id, 'CREATE', str(obj),
+            datos_nuevos={'nombre': obj.nombre, 'email': obj.email},
+        )
+
+    def perform_update(self, serializer):
+        ant = {'nombre': serializer.instance.nombre, 'email': serializer.instance.email}
+        obj = serializer.save()
+        _registrar_auditoria_api(
+            self.request, 'Usuario', obj.id, 'UPDATE', str(obj),
+            datos_anteriores=ant,
+            datos_nuevos={'nombre': obj.nombre, 'email': obj.email},
+        )
+
     def destroy(self, request, *args, **kwargs):
         usuario = self.get_object()
-        from .models import Prestamo
         if Prestamo.objects.filter(usuario=usuario, estado__in=['Activo', 'Retraso']).exists():
-            return Response(
-                {'error': 'El usuario tiene préstamos activos. Procese las devoluciones primero.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        # Soft-delete primero; auditoría solo si el save no lanza excepción.
-        with transaction.atomic():
-            usuario.activo = False
-            usuario.save(update_fields=['activo'])
-            registrar_auditoria(
-                request, 'Usuario', usuario.id, 'DELETE', str(usuario),
-                datos_anteriores={'nombre': usuario.nombre, 'email': usuario.email},
-            )
+            return Response({'error': 'El usuario tiene préstamos activos.'}, status=400)
+        _registrar_auditoria_api(           # ← AGREGAR ESTO
+            request, 'Usuario', usuario.id, 'DELETE', str(usuario),
+            datos_anteriores={'nombre': usuario.nombre, 'email': usuario.email},
+        )
+        usuario.activo = False
+        usuario.save(update_fields=['activo'])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -432,13 +471,8 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
                 {'error': 'El empleado tiene préstamos activos asignados.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        with transaction.atomic():
-            empleado.activo = False
-            empleado.save(update_fields=['activo'])
-            registrar_auditoria(
-                request, 'Empleado', empleado.id, 'DELETE', str(empleado),
-                datos_anteriores={'nombre': empleado.nombre, 'email': empleado.email},
-            )
+        empleado.activo = False
+        empleado.save(update_fields=['activo'])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -516,14 +550,12 @@ class PrestamoViewSet(viewsets.ModelViewSet):
             descripcion=f'{usuario_nombre} devolvió "{prestamo.libros_resumen}" el {hoy}.',
             prestamo=prestamo,
         )
-        registrar_auditoria(
-            request, 'Prestamo', prestamo.id, 'UPDATE', f'Prestamo #{prestamo.id}',
-            datos_anteriores={'estado': 'Activo/Retraso'},
-            datos_nuevos={'estado': 'Devuelto', 'fecha_devolucion': str(hoy), 'usuario': usuario_nombre},
+        _registrar_auditoria_api(
+            request, 'Prestamo', prestamo.id, 'UPDATE', str(prestamo),
+            datos_nuevos={'estado': 'Devuelto', 'fecha': str(hoy)},
         )
         return Response({'detail': 'Préstamo devuelto correctamente.',
                          'multa_pendiente': multa is not None})
-
 
 # ─────────────────────────────────────────────
 #  MULTAS
@@ -555,10 +587,9 @@ class MultaViewSet(viewsets.ModelViewSet):
             descripcion=f'Multa #{multa.id} de ${multa.monto} pagada el {hoy} vía API.',
             prestamo=multa.prestamo,
         )
-        registrar_auditoria(
-            request, 'Multa', multa.id, 'UPDATE', f'Multa #{multa.id}',
-            datos_anteriores={'estado': 'Pendiente'},
-            datos_nuevos={'estado': 'Pagada', 'fecha_pago': str(hoy), 'monto': float(multa.monto)},
+        _registrar_auditoria_api(       # ← AGREGAR AL FINAL
+            request, 'Multa', multa.id, 'UPDATE', str(multa),
+            datos_nuevos={'estado': 'Pagada', 'monto': float(multa.monto), 'fecha_pago': str(hoy)},
         )
         return Response({'detail': 'Multa pagada correctamente.'})
 
@@ -579,21 +610,11 @@ class HistorialViewSet(viewsets.ReadOnlyModelViewSet):
 #  AUDITORÍA  (solo superadmin, solo lectura)
 # ─────────────────────────────────────────────
 
-class IsSuperuserOrStaff(IsAdminUser):
-    """Permite acceso a superusuarios Y a staff, cubriendo ambos casos."""
-    def has_permission(self, request, view):
-        return bool(
-            request.user and
-            request.user.is_authenticated and
-            (request.user.is_superuser or request.user.is_staff)
-        )
-
-
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
-    """Solo accesible para administradores (superuser o staff)."""
+    """Solo accesible para administradores."""
     queryset           = AuditLog.objects.select_related('usuario').order_by('-fecha')
     serializer_class   = AuditLogSerializer
-    permission_classes = [IsSuperuserOrStaff]
+    permission_classes = [IsAdminUser]
     filter_backends    = [filters.SearchFilter]
     search_fields      = ['tabla', 'accion', 'objeto_repr', 'empleado_nombre']
 
@@ -728,9 +749,13 @@ class ClientePrestamosAPIView(APIView):
             descripcion=f'{usuario.nombre} solicito "{libro.titulo}" via API. Vence el {fecha_limite}.',
             prestamo=prestamo,
         )
-        registrar_auditoria(
-            request, 'Prestamo', prestamo.id, 'CREATE', f'Prestamo #{prestamo.id}',
-            datos_nuevos={'usuario': usuario.nombre, 'libro': libro.titulo, 'fecha_limite': str(fecha_limite)},
+        _registrar_auditoria_api(
+            request, 'Prestamo', prestamo.id, 'CREATE', f'Préstamo API: {libro.titulo}',
+            datos_nuevos={
+                'usuario': usuario.nombre,
+                'libro': libro.titulo,
+                'fecha_limite': str(fecha_limite),
+            },
         )
         _notificar('prestamo_creado')
         return Response({
@@ -774,10 +799,6 @@ class ClienteReservasAPIView(APIView):
         if reserva:
             return Response({'detail': 'Ya estas en la cola para este libro.', 'reserva': ReservaLibroSerializer(reserva).data})
         reserva = ReservaLibro.objects.create(usuario=usuario, libro=libro, estado='En cola')
-        registrar_auditoria(
-            request, 'ReservaLibro', reserva.id, 'CREATE', str(reserva),
-            datos_nuevos={'usuario': usuario.nombre, 'libro': libro.titulo, 'estado': 'En cola'},
-        )
         _notificar('reserva_creada')
         return Response({
             'detail': 'Reserva creada. Estate atento a tu dashboard para pedirlo cuando este apartado.',
@@ -841,10 +862,6 @@ class ClienteValoracionesAPIView(APIView):
                 'puntaje': puntaje,
                 'comentario': request.data.get('comentario', ''),
             },
-        )
-        registrar_auditoria(
-            request, 'ValoracionLibro', valoracion.id, 'CREATE', str(valoracion),
-            datos_nuevos={'usuario': usuario.nombre, 'libro': libro.titulo, 'puntaje': puntaje},
         )
         _notificar('valoracion_creada')
         return Response(ValoracionLibroSerializer(valoracion).data, status=201)
