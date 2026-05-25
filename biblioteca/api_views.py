@@ -39,33 +39,61 @@ from .serializers import (
 # ─────────────────────────────────────────────
 #  UTILIDADES DE AUDITORÍA (importadas desde views)
 # ─────────────────────────────────────────────
+import logging
+from django.forms.models import model_to_dict
 
-# ─────────────────────────────────────────────
-#  UTILIDADES DE AUDITORÍA (importadas desde views)
-# ─────────────────────────────────────────────
+logger = logging.getLogger(__name__)
 
-def _registrar_auditoria_api(request, tabla, objeto_id, accion,
-                              repr_objeto='', datos_anteriores=None, datos_nuevos=None):
-    """Wrapper que reutiliza la lógica de views.py asegurando el mapeo de kwargs."""
+
+def _serializar_para_auditoria(data):
+    """
+    Convierte cualquier estructura a algo seguro para JSONField.
+    """
     try:
-        from .views import registrar_auditoria
-        # Pasamos los parámetros opcionales explícitamente por nombre
-        # Esto evita cualquier conflicto si el orden de la firma en views.py varía
+        import json
+
+        json.dumps(data)
+        return data
+
+    except Exception:
+        if isinstance(data, dict):
+            return {str(k): str(v) for k, v in data.items()}
+
+        if isinstance(data, (list, tuple)):
+            return [str(v) for v in data]
+
+        return str(data)
+
+
+def _registrar_auditoria_api(
+    request,
+    tabla,
+    objeto_id,
+    accion,
+    repr_objeto='',
+    datos_anteriores=None,
+    datos_nuevos=None
+):
+    """
+    Wrapper seguro para auditorías desde DRF.
+    Nunca debe romper la petición principal.
+    """
+
+    try:
         registrar_auditoria(
-            request, 
-            tabla, 
-            objeto_id, 
-            accion,
+            request=request,
+            tabla=tabla,
+            objeto_id=objeto_id,
+            accion=accion,
             repr_objeto=repr_objeto,
-            datos_anteriores=datos_anteriores,
-            datos_nuevos=datos_nuevos
+            datos_anteriores=_serializar_para_auditoria(datos_anteriores),
+            datos_nuevos=_serializar_para_auditoria(datos_nuevos),
         )
+
     except Exception as e:
-        # En lugar de un 'pass' vacío, registramos el error en la consola
-        # para saber exactamente qué está fallando dentro de views.py
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Error en registrar_auditoria para {tabla} [{accion}]: {e}", exc_info=True)
+        logger.exception(
+            f"ERROR AUDITORIA [{tabla}] [{accion}] [{objeto_id}]: {e}"
+        )
 
 # ─────────────────────────────────────────────
 #  AUTENTICACIÓN  (Token para Flutter)
