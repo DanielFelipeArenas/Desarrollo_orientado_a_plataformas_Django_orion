@@ -34,6 +34,7 @@ from .serializers import (
     RegistroUsuarioAPISerializer, ReservaLibroSerializer,
     ValoracionLibroSerializer, ConfiguracionPublicaSerializer,
 )
+from .views import registrar_auditoria
 
 
 # ─────────────────────────────────────────────
@@ -266,6 +267,10 @@ class RegistroUsuarioAPIView(APIView):
             telefono=data['telefono'],
         )
         token, _ = Token.objects.get_or_create(user=user)
+        registrar_auditoria(
+            request, 'Usuario', usuario.id, 'CREATE', str(usuario),
+            datos_nuevos={'nombre': usuario.nombre, 'email': usuario.email, 'telefono': usuario.telefono},
+        )
         return Response({
             'token': token.key,
             'user_id': user.id,
@@ -400,6 +405,10 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         # Soft-delete
+        registrar_auditoria(
+            request, 'Usuario', usuario.id, 'DELETE', str(usuario),
+            datos_anteriores={'nombre': usuario.nombre, 'email': usuario.email},
+        )
         usuario.activo = False
         usuario.save(update_fields=['activo'])
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -419,6 +428,10 @@ class EmpleadoViewSet(viewsets.ModelViewSet):
                 {'error': 'El empleado tiene préstamos activos asignados.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        registrar_auditoria(
+            request, 'Empleado', empleado.id, 'DELETE', str(empleado),
+            datos_anteriores={'nombre': empleado.nombre, 'email': empleado.email},
+        )
         empleado.activo = False
         empleado.save(update_fields=['activo'])
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -498,6 +511,11 @@ class PrestamoViewSet(viewsets.ModelViewSet):
             descripcion=f'{usuario_nombre} devolvió "{prestamo.libros_resumen}" el {hoy}.',
             prestamo=prestamo,
         )
+        registrar_auditoria(
+            request, 'Prestamo', prestamo.id, 'UPDATE', f'Prestamo #{prestamo.id}',
+            datos_anteriores={'estado': 'Activo/Retraso'},
+            datos_nuevos={'estado': 'Devuelto', 'fecha_devolucion': str(hoy), 'usuario': usuario_nombre},
+        )
         return Response({'detail': 'Préstamo devuelto correctamente.',
                          'multa_pendiente': multa is not None})
 
@@ -531,6 +549,11 @@ class MultaViewSet(viewsets.ModelViewSet):
             tipo_accion='Multa',
             descripcion=f'Multa #{multa.id} de ${multa.monto} pagada el {hoy} vía API.',
             prestamo=multa.prestamo,
+        )
+        registrar_auditoria(
+            request, 'Multa', multa.id, 'UPDATE', f'Multa #{multa.id}',
+            datos_anteriores={'estado': 'Pendiente'},
+            datos_nuevos={'estado': 'Pagada', 'fecha_pago': str(hoy), 'monto': float(multa.monto)},
         )
         return Response({'detail': 'Multa pagada correctamente.'})
 
@@ -690,6 +713,10 @@ class ClientePrestamosAPIView(APIView):
             descripcion=f'{usuario.nombre} solicito "{libro.titulo}" via API. Vence el {fecha_limite}.',
             prestamo=prestamo,
         )
+        registrar_auditoria(
+            request, 'Prestamo', prestamo.id, 'CREATE', f'Prestamo #{prestamo.id}',
+            datos_nuevos={'usuario': usuario.nombre, 'libro': libro.titulo, 'fecha_limite': str(fecha_limite)},
+        )
         _notificar('prestamo_creado')
         return Response({
             'detail': f'Debes devolver "{libro.titulo}" antes del {fecha_limite}.',
@@ -732,6 +759,10 @@ class ClienteReservasAPIView(APIView):
         if reserva:
             return Response({'detail': 'Ya estas en la cola para este libro.', 'reserva': ReservaLibroSerializer(reserva).data})
         reserva = ReservaLibro.objects.create(usuario=usuario, libro=libro, estado='En cola')
+        registrar_auditoria(
+            request, 'ReservaLibro', reserva.id, 'CREATE', str(reserva),
+            datos_nuevos={'usuario': usuario.nombre, 'libro': libro.titulo, 'estado': 'En cola'},
+        )
         _notificar('reserva_creada')
         return Response({
             'detail': 'Reserva creada. Estate atento a tu dashboard para pedirlo cuando este apartado.',
@@ -795,6 +826,10 @@ class ClienteValoracionesAPIView(APIView):
                 'puntaje': puntaje,
                 'comentario': request.data.get('comentario', ''),
             },
+        )
+        registrar_auditoria(
+            request, 'ValoracionLibro', valoracion.id, 'CREATE', str(valoracion),
+            datos_nuevos={'usuario': usuario.nombre, 'libro': libro.titulo, 'puntaje': puntaje},
         )
         _notificar('valoracion_creada')
         return Response(ValoracionLibroSerializer(valoracion).data, status=201)
